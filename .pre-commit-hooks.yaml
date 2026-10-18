@@ -1,0 +1,8 @@
+- id: torchlight
+  name: Torchlight Spark safety checks
+  description: Review Spark driver-memory, partitioning, and projection-loop risks.
+  entry: torchlight
+  language: python
+  types: [file]
+  files: \.(py|ipynb)$
+  require_serial: true
