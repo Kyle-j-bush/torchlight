@@ -1,11 +1,13 @@
 # Copyright 2026 Kyle Bush
 # SPDX-License-Identifier: Apache-2.0
 
-"""Human-readable, JSON, and safely escaped GitHub Actions output."""
+"""Human-readable, JSON, SARIF, and safely escaped GitHub Actions output."""
 
 import json
+from pathlib import Path
 
 from torchlight.diagnostics import Finding
+from torchlight.sarif import sarif_report
 
 
 def escape_command(value: str, *, property_value: bool = False) -> str:
@@ -33,7 +35,19 @@ def github_annotation(finding: Finding) -> str:
     return f"::warning {','.join(properties)}::{escape_command(message)}"
 
 
-def render(findings: list[Finding], errors: list[str], output_format: str) -> str:
+def render(
+    findings: list[Finding],
+    errors: list[str],
+    output_format: str,
+    *,
+    root: Path | None = None,
+) -> str:
+    if output_format == "sarif":
+        return json.dumps(
+            sarif_report(findings, errors, root or Path.cwd()),
+            indent=2,
+            ensure_ascii=True,
+        )
     if output_format == "json":
         return json.dumps(
             {

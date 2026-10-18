@@ -23,7 +23,8 @@ On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
    python -m ruff format --check .
     python -m unittest discover -s tests -v
     python -m scripts.check_benchmark
-    python -m scripts.generate_rule_docs --check
+     python -m scripts.generate_rule_docs --check
+     python -m scripts.check_sarif
    ```
 
     To fix formatting, run `python -m ruff format .`.
@@ -72,6 +73,12 @@ described in [SECURITY.md](SECURITY.md).
 - Configuration discovery, precedence, and glob semantics are compatibility
   contracts; add positive and negative tests before changing them. See the
   [configuration reference](docs/configuration.md).
+- Finding fingerprints and baseline schemas are versioned contracts. Keep golden
+  identity tests, duplicate-count matching, and error-preserving atomic writes.
+  See [report identity and SARIF](docs/reporting.md) and [baselines](docs/baselines.md).
+  The SARIF development check downloads a checksum-pinned public OASIS schema;
+  `--schema PATH` uses an exact local copy for offline validation. Scanner code
+  must never depend on `jsonschema` or make network requests.
 
 The [docs index](docs/README.md) separates user guides, rule reference, analysis
 boundaries, and development decisions. The first compatibility assessment is in

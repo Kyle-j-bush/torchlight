@@ -19,6 +19,11 @@
 - Explicit, atomic `--write-baseline` capture/update after error-free scans,
   refusing to overwrite unrelated files or symlinks. Successful capture exits 0;
   failed capture exits 2 without changing the snapshot.
+- SARIF 2.1.0 output with rule help, evidence, occurrence-aware fingerprints,
+  Unicode source coordinates, honest notebook file locations, and unsuccessful
+  invocation notifications for scan errors.
+- SHA-pinned GitHub Code Scanning workflow example and development-only OASIS
+  schema validation in CI and release checks. No scanner network calls are added.
 
 No runtime dependencies or new rules. Python 3.12+ remains required. Without a
 baseline, scan exit semantics are unchanged. JSON schema version 1 gains only an

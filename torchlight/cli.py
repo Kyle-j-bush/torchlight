@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--format",
-        choices=("text", "json", "github"),
+        choices=("text", "json", "github", "sarif"),
         default="text",
         help="Output format (default: text). GitHub output uses Actions annotations.",
     )
@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             validate_destination(args.write_baseline)
     except BaselineError as exc:
         message = f"baseline error: {exc}"
-        output = render([], [message], args.format)
+        output = render([], [message], args.format, root=config.root)
         if output:
             print(output)
         report_error(message)
@@ -212,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         except BaselineError as exc:
             errors.append(f"baseline error: {exc}")
 
-    output = render(findings, errors, args.format)
+    output = render(findings, errors, args.format, root=config.root)
     if output:
         print(output)
     for error in errors:
