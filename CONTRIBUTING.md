@@ -23,6 +23,7 @@ On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
    python -m ruff format --check .
     python -m unittest discover -s tests -v
     python -m scripts.check_benchmark
+    python -m scripts.generate_rule_docs --check
    ```
 
     To fix formatting, run `python -m ruff format .`.
@@ -66,6 +67,17 @@ described in [SECURITY.md](SECURITY.md).
   must remain specific and reasoned; malformed directives must not hide findings.
 - Treat JSON fields and rule IDs as integration interfaces. Explain incompatible
   changes in `CHANGELOG.md`. Scanners return structured `Finding` objects.
+- Keep the [curated rule guides](docs/rules/README.md) current and regenerate the
+  catalog with `python -m scripts.generate_rule_docs` after metadata changes.
+- Configuration discovery, precedence, and glob semantics are compatibility
+  contracts; add positive and negative tests before changing them. See the
+  [configuration reference](docs/configuration.md).
+
+The [docs index](docs/README.md) separates user guides, rule reference, analysis
+boundaries, and development decisions. The first compatibility assessment is in
+[docs/development/python-compatibility.md](docs/development/python-compatibility.md).
+Real-world validation must follow the [benchmark protocol](benchmarks/real-world-protocol.md);
+the synthetic corpus does not establish production accuracy.
 
 To exercise the repository's hook manifest, install pre-commit in a development
 environment, then run:

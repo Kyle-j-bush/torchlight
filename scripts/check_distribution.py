@@ -105,6 +105,42 @@ def check_install(archive: Path, project: dict) -> None:
             ):
                 raise SystemExit(f"Installed CLI failed: {result}")
 
+        # Exercise configuration from outside the checkout through both installed
+        # entry points, including explicit paths as supplied by pre-commit.
+        (work / "pyproject.toml").write_text(
+            '[tool.torchlight]\nselect = ["TL002"]\n'
+            'exclude = ["generated/**"]\nassume-spark-session = ["spark"]\n',
+            encoding="utf-8",
+        )
+        source.write_text("spark.table('events').collect()\n", encoding="utf-8")
+        excluded = work / "generated" / "invalid.py"
+        excluded.parent.mkdir()
+        excluded.write_text("?", encoding="utf-8")
+        for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
+            for arguments, expected_status in (
+                ([str(source)], 0),
+                (["--select", "TL001", str(source), str(excluded)], 1),
+                (["--select", "TL001", str(work)], 1),
+                (["--no-config", str(source)], 0),
+            ):
+                result = subprocess.run(
+                    [*entry, *arguments],
+                    cwd=work,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if (
+                    result.returncode != expected_status
+                    or result.stderr
+                    or (expected_status == 0 and result.stdout)
+                    or (
+                        expected_status == 1
+                        and not result.stdout.startswith(f"{source}:1: TL001:")
+                    )
+                ):
+                    raise SystemExit(f"Installed configuration failed: {result}")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Shared `[tool.torchlight]` policy for rule selection, ignores, path exclusions,
+  and explicit SparkSession assumptions using the standard-library TOML parser.
+- Deterministic working-directory discovery, explicit `--config`/`--no-config`,
+  CLI overrides, and repeatable `--exclude` globs applying to explicit inputs too.
+  Invalid configuration aborts before scanning with exit code 2.
+- User guides, a generated rule catalog checked in CI, and curated rule examples.
+- An initial Python-compatibility assessment and a permissioned, independently
+  labeled real-world benchmark protocol (not a new accuracy claim).
+
+No runtime dependencies or new rules. Python 3.12+ remains required; JSON findings
+and existing scan exit semantics are unchanged.
+
 ## 0.2.0 — 2026-10-18
 
 ### Changed

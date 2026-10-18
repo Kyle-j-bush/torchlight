@@ -3,3 +3,4 @@ include .pre-commit-hooks.yaml
 recursive-include tests *.py
 recursive-include scripts *.py
 recursive-include benchmarks *.json *.md
+recursive-include docs *.md

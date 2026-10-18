@@ -4,6 +4,7 @@
 """Find Python files and notebooks, and scan Python files."""
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
@@ -25,13 +26,20 @@ IGNORED_DIRS = {
 }
 
 
-def iter_source_files(root: Path):
+def iter_source_files(root: Path, *, is_excluded: Callable[[Path], bool] | None = None):
     """Yield .py and .ipynb files under root, in name order."""
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS)
+        dirnames[:] = sorted(
+            d
+            for d in dirnames
+            if d not in IGNORED_DIRS
+            and (is_excluded is None or not is_excluded(Path(dirpath) / d))
+        )
         for name in sorted(filenames):
             path = Path(dirpath) / name
-            if path.suffix in SOURCE_SUFFIXES:
+            if path.suffix in SOURCE_SUFFIXES and (
+                is_excluded is None or not is_excluded(path)
+            ):
                 yield path
 
 

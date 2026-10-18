@@ -4,10 +4,16 @@
 """Command-line arguments, findings on stdout, and errors on stderr."""
 
 import argparse
-import keyword
 import sys
+from dataclasses import replace
 from pathlib import Path
 
+from torchlight.config import (
+    ConfigError,
+    load_config,
+    valid_session_name,
+    validate_pattern,
+)
 from torchlight.diagnostics import RULES
 from torchlight.files import SOURCE_SUFFIXES, iter_source_files, scan_file
 from torchlight.reporting import render
@@ -39,24 +45,40 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--select",
         type=rule_codes,
-        default=set(RULES),
         metavar="RULES",
-        help="Comma-separated rule IDs to enable (default: TL001,TL002,TL003).",
+        help="Comma-separated rule IDs to enable; replaces configured selection.",
     )
     parser.add_argument(
         "--ignore",
         type=rule_codes,
-        default=set(),
         metavar="RULES",
         help="Comma-separated rule IDs to disable; overrides --select.",
     )
     parser.add_argument(
         "--assume-spark-session",
         action="append",
-        default=[],
         type=session_name,
         metavar="NAME",
         help="Explicitly treat an existing name as a SparkSession; repeatable.",
+    )
+    config_group = parser.add_mutually_exclusive_group()
+    config_group.add_argument(
+        "--config",
+        type=Path,
+        metavar="PATH",
+        help="Read [tool.torchlight] from this TOML file instead of discovering one.",
+    )
+    config_group.add_argument(
+        "--no-config",
+        action="store_true",
+        help="Ignore project configuration; exclusions are relative to the working directory.",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        type=exclude_pattern,
+        metavar="GLOB",
+        help="Exclude a project-relative glob; repeatable, replaces configured excludes.",
     )
     return parser
 
@@ -69,11 +91,18 @@ def rule_codes(value: str) -> set[str]:
 
 
 def session_name(value: str) -> str:
-    if not value.isidentifier() or keyword.iskeyword(value):
+    if not valid_session_name(value):
         raise argparse.ArgumentTypeError(
             "expected a Python variable name, such as spark"
         )
     return value
+
+
+def exclude_pattern(value: str) -> str:
+    try:
+        return validate_pattern(value)
+    except ConfigError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,11 +111,36 @@ def main(argv: list[str] | None = None) -> int:
     findings = []
     errors = []
     seen = set()
-    enabled_rules = args.select - args.ignore
+    try:
+        config = load_config(config_path=args.config, no_config=args.no_config)
+    except ConfigError as exc:
+        message = f"configuration error: {exc}"
+        output = render([], [message], args.format)
+        if output:
+            print(output)
+        report_error(message)
+        return 2
+
+    overrides = {}
+    for argument, field in (
+        (args.select, "select"),
+        (args.ignore, "ignore"),
+        (args.exclude, "exclude"),
+        (args.assume_spark_session, "assume_sessions"),
+    ):
+        if argument is not None:
+            overrides[field] = (
+                frozenset(argument)
+                if field in {"select", "ignore"}
+                else tuple(argument)
+            )
+    config = replace(config, **overrides)
 
     for path in args.paths:
+        if path.exists() and config.is_excluded(path):
+            continue
         if path.is_dir():
-            files = iter_source_files(path)
+            files = iter_source_files(path, is_excluded=config.is_excluded)
         elif path.is_file() and path.suffix in SOURCE_SUFFIXES:
             files = [path]
         else:
@@ -104,9 +158,11 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             seen.add(resolved)
             file_findings, file_errors = scan_file(
-                file, assume_sessions=tuple(args.assume_spark_session)
+                file, assume_sessions=config.assume_sessions
             )
-            findings.extend(f for f in file_findings if f.rule_id in enabled_rules)
+            findings.extend(
+                f for f in file_findings if f.rule_id in config.enabled_rules
+            )
             errors.extend(file_errors)
 
     output = render(findings, errors, args.format)
