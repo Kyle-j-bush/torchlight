@@ -53,10 +53,27 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m unittest discover -s tests -v
 
+  package:
+    name: Build and test distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - run: python scripts/check_distribution.py
+
   required:
     name: CI
     if: ${{ always() }}
-    needs: [lint, tests]
+    needs: [lint, tests, package]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -65,6 +82,8 @@ jobs:
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           TEST_RESULT: ${{ needs.tests.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
         run: |
           test "$LINT_RESULT" = success
           test "$TEST_RESULT" = success
+          test "$PACKAGE_RESULT" = success

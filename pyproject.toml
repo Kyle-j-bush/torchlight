@@ -1,3 +1,39 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchlight-spark"
+version = "0.1.0"
+description = "Scan Python files and Jupyter notebooks for Spark method calls."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Kyle Bush" }]
+dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.scripts]
+torchlight = "torchlight.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Kyle-j-bush/torchlight"
+Issues = "https://github.com/Kyle-j-bush/torchlight/issues"
+Changelog = "https://github.com/Kyle-j-bush/torchlight/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+include = ["torchlight", "torchlight.*"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 88
