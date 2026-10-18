@@ -1,0 +1,2 @@
+# Development only; Torchlight has no third-party runtime dependencies.
+ruff==0.17.1

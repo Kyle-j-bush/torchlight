@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem with Torchlight.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, use the private reporting link instead.
+        Do not include credentials or private data in examples or logs.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include your operating system, Python version, and Torchlight commit.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the command and the smallest input that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include any error output, with private data removed.
+    validations:
+      required: true
