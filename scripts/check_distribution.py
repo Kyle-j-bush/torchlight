@@ -27,6 +27,23 @@ assert all(any(str(f).endswith('/licenses/' + name) for f in d.files)
            for name in ('LICENSE', 'NOTICE'))
 assert Path(torchlight.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 """
+API_CHECK = """
+import json
+import sys
+from pathlib import Path
+from torchlight import Config, ConfigError, Finding, Location, Rule, Scanner, ScanReport
+
+report = Scanner(Config(root=Path.cwd())).scan(Path(sys.argv[1]))
+assert isinstance(report, ScanReport)
+assert report.exit_code == 1 and not report.errors
+assert len(report.findings) == 1 and isinstance(report.findings[0], Finding)
+assert isinstance(report.findings[0].location, Location)
+assert isinstance(report.findings[0].rule, Rule)
+assert report.findings[0].rule_id == 'TL001'
+assert json.loads(report.render('json')) == report.to_dict()
+assert report.to_dict()['schema_version'] == 1
+assert report.findings[0].fingerprint.startswith('v1:')
+"""
 
 
 def check_install(archive: Path, project: dict) -> None:
@@ -85,6 +102,11 @@ def check_install(archive: Path, project: dict) -> None:
             "spark = SparkSession.builder.getOrCreate()\n"
             "spark.table('events').collect()\n",
             encoding="utf-8",
+        )
+        subprocess.run(
+            [str(python), "-I", "-c", API_CHECK, str(source)],
+            cwd=work,
+            check=True,
         )
         for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
             subprocess.run(

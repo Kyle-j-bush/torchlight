@@ -127,7 +127,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_invalid_baseline_aborts_before_scanning(self):
         self.baseline.write_text("{}", encoding="utf-8")
-        with patch("torchlight.cli.scan_file") as scan:
+        with patch("torchlight.scanner.scan_file") as scan:
             status, stdout, stderr = self.run_cli(
                 "--format", "json", "--baseline", self.baseline, "."
             )

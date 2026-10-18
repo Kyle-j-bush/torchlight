@@ -26,9 +26,14 @@ IGNORED_DIRS = {
 }
 
 
-def iter_source_files(root: Path, *, is_excluded: Callable[[Path], bool] | None = None):
+def iter_source_files(
+    root: Path,
+    *,
+    is_excluded: Callable[[Path], bool] | None = None,
+    on_error: Callable[[OSError], None] | None = None,
+):
     """Yield .py and .ipynb files under root, in name order."""
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, onerror=on_error):
         dirnames[:] = sorted(
             d
             for d in dirnames

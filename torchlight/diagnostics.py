@@ -76,6 +76,9 @@ class Finding:
     snippet: str
     structural_key: str = field(default="", repr=False, compare=False)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "evidence", tuple(self.evidence))
+
     @property
     def fingerprint(self) -> str:
         return fingerprint(self.rule_id, self.structural_key or self.snippet)

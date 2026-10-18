@@ -347,7 +347,7 @@ class ConfigCliTests(ProjectFiles):
         for output_format in ("text", "json", "github", "sarif"):
             with (
                 self.subTest(output_format=output_format),
-                patch("torchlight.cli.scan_file") as scan,
+                patch("torchlight.scanner.scan_file") as scan,
             ):
                 status, stdout, stderr = self.run_cli("--format", output_format, job)
                 self.assertEqual(status, 2)

@@ -66,12 +66,57 @@ def _matches(
 
 @dataclass(frozen=True)
 class Config:
+    """Immutable scan policy. Relative baseline paths are anchored to ``root``."""
+
     select: frozenset[str] = frozenset(RULES)
     ignore: frozenset[str] = frozenset()
     exclude: tuple[str, ...] = ()
     assume_sessions: tuple[str, ...] = ()
     root: Path = field(default_factory=Path.cwd)
     baseline: Path | None = None
+
+    def __post_init__(self) -> None:
+        # Snapshot caller-owned collections so a frozen Config is deeply immutable.
+        for name in ("select", "ignore", "exclude", "assume_sessions"):
+            value = getattr(self, name)
+            if not isinstance(value, (list, tuple, set, frozenset)) or any(
+                not isinstance(item, str) for item in value
+            ):
+                raise ConfigError(f"{name} must be a collection of strings")
+            normalized = (
+                frozenset(value) if name in {"select", "ignore"} else tuple(value)
+            )
+            object.__setattr__(self, name, normalized)
+        for name in ("select", "ignore"):
+            unknown = getattr(self, name) - RULES.keys()
+            if unknown:
+                raise ConfigError(
+                    f"{name}: unknown rule ID(s): {', '.join(sorted(unknown))}"
+                )
+        for name in self.assume_sessions:
+            if not valid_session_name(name):
+                raise ConfigError(
+                    f"assume_sessions: invalid Python variable name {name!r}"
+                )
+        for pattern in self.exclude:
+            validate_pattern(pattern)
+        try:
+            object.__setattr__(self, "root", Path(self.root).resolve())
+            if self.baseline is not None:
+                if not os.fspath(self.baseline).strip() or "\x00" in os.fspath(
+                    self.baseline
+                ):
+                    raise ConfigError("baseline must be a nonempty path string")
+                object.__setattr__(
+                    self, "baseline", Path(os.path.abspath(self.root / self.baseline))
+                )
+        except (OSError, TypeError, ValueError) as exc:
+            raise ConfigError(f"invalid project or baseline path: {exc}") from exc
+
+    @classmethod
+    def from_pyproject(cls, path: str | Path) -> "Config":
+        """Load an explicit TOML policy; missing/invalid tables raise ConfigError."""
+        return read_config(Path(path), explicit=True)
 
     @property
     def enabled_rules(self) -> frozenset[str]:
