@@ -8,9 +8,12 @@ select = ["TL001", "TL002", "TL003"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
 assume-spark-session = ["spark"]
+# Optional, after creating and reviewing a snapshot:
+# baseline = ".torchlight-baseline.json"
 ```
 
-Every setting is optional. All values must be arrays of strings. Unknown keys,
+Every setting is optional. List values must be arrays of strings; `baseline` is
+a nonempty path string. Unknown keys,
 unknown rule IDs, malformed TOML, invalid globs, and invalid session names stop
 the run **before scanning**, with exit code 2. JSON and GitHub formats also report
 configuration errors in their structured output. Python config is never executed.
@@ -21,10 +24,11 @@ configuration errors in their structured output. Python config is never executed
 | `ignore` | `[]` | Rules to disable; ignore wins over select. |
 | `exclude` | `[]` | Project-relative file/directory globs; also apply to explicitly named existing paths. |
 | `assume-spark-session` | `[]` | Existing names explicitly treated as SparkSession objects. Names must be Python identifiers, not keywords. |
+| `baseline` | None | Reviewed baseline JSON path, relative to this configuration file. See [baselines](baselines.md). |
 
 Assumptions are opt-in. Do not copy `spark` into your policy unless your
 environment actually provides it. Reassignment or opaque notebook cells can
-invalidate the assumption. `target-spark`, `baseline`, and `fail-on` are **not
+invalidate the assumption. `target-spark` and `fail-on` are **not
 supported settings** and are rejected rather than silently ignored.
 
 ## Discovery and precedence
@@ -88,5 +92,6 @@ scan policy, not a security sandbox.
 Built-in virtual-environment/VCS/cache directory skips remain in effect during
 recursive discovery and cannot be re-enabled by configuration.
 
-Output formats, findings, reason-required suppressions, and exit codes are
-unchanged. No runtime dependencies are added.
+Without a baseline, scan exit semantics are unchanged. Baselines filter existing
+findings before reporting and deciding the exit code; snapshot writing has its
+own documented success/error contract. No runtime dependencies are added.

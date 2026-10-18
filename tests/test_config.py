@@ -112,6 +112,9 @@ class ConfigTests(ProjectFiles):
             ),
             ('assume-spark-session = ["for"]', "invalid Python variable name"),
             ('assume-spark-session = [""]', "invalid Python variable name"),
+            ('baseline = ""', "baseline must be a nonempty path string"),
+            ('baseline = ["file.json"]', "baseline must be a nonempty path string"),
+            ("baseline = false", "baseline must be a nonempty path string"),
         ):
             with self.subTest(settings=settings):
                 path = self.configure(settings)

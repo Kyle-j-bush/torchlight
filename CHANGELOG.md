@@ -14,9 +14,15 @@
   labeled real-world benchmark protocol (not a new accuracy claim).
 - Versioned structural finding fingerprints, stable across formatting and
   line/cell insertions, exposed as an additive JSON schema version 1 field.
+- Portable, occurrence-counted baselines through `--baseline` or project policy;
+  only new findings are reported. `--no-baseline` restores the complete report.
+- Explicit, atomic `--write-baseline` capture/update after error-free scans,
+  refusing to overwrite unrelated files or symlinks. Successful capture exits 0;
+  failed capture exits 2 without changing the snapshot.
 
-No runtime dependencies or new rules. Python 3.12+ remains required; existing scan
-exit semantics are unchanged. JSON schema version 1 gains only an additive field.
+No runtime dependencies or new rules. Python 3.12+ remains required. Without a
+baseline, scan exit semantics are unchanged. JSON schema version 1 gains only an
+additive field. Git-base comparison is not implemented.
 
 ## 0.2.0 — 2026-10-18
 

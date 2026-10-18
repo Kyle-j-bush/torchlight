@@ -6,6 +6,23 @@
 import ast
 import hashlib
 import json
+import os
+from pathlib import Path
+
+
+def project_path(path: str | Path, root: Path) -> str | None:
+    """Portable named path, preserving in-project symlinks and root aliases."""
+    absolute = Path(os.path.abspath(path))
+    root = root.resolve()
+    for ancestor in (absolute, *absolute.parents):
+        if ancestor == root:
+            return absolute.relative_to(ancestor).as_posix()
+        try:
+            if ancestor.resolve() == root:
+                return absolute.relative_to(ancestor).as_posix()
+        except (OSError, RuntimeError):
+            continue
+    return None
 
 
 def _syntax(value):

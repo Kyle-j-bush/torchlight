@@ -8,6 +8,13 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from torchlight.baseline import (
+    BaselineError,
+    new_findings,
+    read_baseline,
+    validate_destination,
+    write_baseline,
+)
 from torchlight.config import (
     ConfigError,
     load_config,
@@ -80,6 +87,24 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="GLOB",
         help="Exclude a project-relative glob; repeatable, replaces configured excludes.",
     )
+    baseline_group = parser.add_mutually_exclusive_group()
+    baseline_group.add_argument(
+        "--baseline",
+        type=Path,
+        metavar="PATH",
+        help="Report only findings not recorded in this baseline JSON file.",
+    )
+    baseline_group.add_argument(
+        "--write-baseline",
+        type=Path,
+        metavar="PATH",
+        help="Capture all enabled findings after an error-free scan; success exits 0.",
+    )
+    baseline_group.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="Ignore the configured baseline and report all enabled findings.",
+    )
     return parser
 
 
@@ -135,6 +160,20 @@ def main(argv: list[str] | None = None) -> int:
                 else tuple(argument)
             )
     config = replace(config, **overrides)
+    try:
+        baseline_path = args.baseline or config.baseline
+        if args.no_baseline or args.write_baseline is not None:
+            baseline_path = None
+        baseline = read_baseline(baseline_path) if baseline_path is not None else None
+        if args.write_baseline is not None:
+            validate_destination(args.write_baseline)
+    except BaselineError as exc:
+        message = f"baseline error: {exc}"
+        output = render([], [message], args.format)
+        if output:
+            print(output)
+        report_error(message)
+        return 2
 
     for path in args.paths:
         if path.exists() and config.is_excluded(path):
@@ -165,12 +204,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             errors.extend(file_errors)
 
+    if baseline is not None:
+        findings = new_findings(findings, baseline, config.root)
+    if args.write_baseline is not None and not errors:
+        try:
+            write_baseline(args.write_baseline, findings, config.root)
+        except BaselineError as exc:
+            errors.append(f"baseline error: {exc}")
+
     output = render(findings, errors, args.format)
     if output:
         print(output)
     for error in errors:
         report_error(error)
 
+    if args.write_baseline is not None:
+        return 2 if errors else 0
     if findings:
         return 1
     if errors:
