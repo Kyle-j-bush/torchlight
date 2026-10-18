@@ -9,7 +9,7 @@ from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.diagnostics import Finding
-from torchlight.notebooks import scan_notebook
+from torchlight.notebooks import scan_notebook, scan_notebook_source
 from torchlight.suppressions import apply_suppressions
 
 SOURCE_SUFFIXES = {".py", ".ipynb"}
@@ -54,8 +54,18 @@ def scan_python(
     """Return (findings, errors) for a Python file."""
     try:
         source = path.read_text(encoding="utf-8-sig")
+    except (OSError, ValueError) as exc:
+        return [], [f"{path}: {format_syntax_error(exc)}"]
+    return scan_python_source(path, source, assume_sessions=assume_sessions)
+
+
+def scan_python_source(
+    path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
+) -> tuple[list[Finding], list[str]]:
+    """Analyze in-memory Python without importing or executing it."""
+    try:
         tree = parse_source(source, str(path))
-    except (OSError, SyntaxError, ValueError) as exc:
+    except (SyntaxError, ValueError) as exc:
         return [], [f"{path}: {format_syntax_error(exc)}"]
 
     analyzer = SparkAnalyzer(str(path), assume_sessions)
@@ -69,3 +79,15 @@ def scan_file(
     if path.suffix == ".ipynb":
         return scan_notebook(path, assume_sessions=assume_sessions)
     return scan_python(path, assume_sessions=assume_sessions)
+
+
+def scan_source(
+    path: Path, source: bytes, *, assume_sessions: tuple[str, ...] = ()
+) -> tuple[list[Finding], list[str]]:
+    """Analyze a Git blob, matching file decoding and universal newline handling."""
+    try:
+        text = source.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    except UnicodeError as exc:
+        return [], [f"{path}: {exc}"]
+    scanner = scan_notebook_source if path.suffix == ".ipynb" else scan_python_source
+    return scanner(path, text, assume_sessions=assume_sessions)
