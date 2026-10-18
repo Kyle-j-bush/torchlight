@@ -1,9 +1,9 @@
 # Follow-up roadmap
 
 The October 2026 research report is a direction, not a claim that its full
-20-week program is shipped. v0.3.0 deliberately completes the CI adoption
-foundation without expanding the three-rule catalog or weakening conservative
-Spark identity analysis.
+20-week program is shipped. v0.3.0 completed the CI adoption foundation; v0.4.0
+adds an internal detector boundary, one narrowly evidenced rule, and an initial
+public Python API without weakening conservative Spark identity analysis.
 
 ## Shipped in v0.3.0
 
@@ -13,18 +13,27 @@ Spark identity analysis.
 - SARIF 2.1.0, pinned Code Scanning example, and OASIS schema validation.
 - User/rule guides, Python compatibility assessment, and real-world benchmark protocol.
 
+## Shipped in v0.4.0
+
+- Immutable semantic facts and a separate internal detector registry for TL001–TL004.
+- Original-rule JSON/text/fingerprint golden tests captured before the refactor.
+- TL004 for proven literal `repartition(1)` provenance feeding terminal writes,
+  with six new synthetic cases and intentional-use, notebook, and invalidation tests.
+- Public immutable Config/Scanner/ScanReport and finding types, explicit TOML
+  loading, read-only baseline filtering, format rendering, and CLI/API parity.
+- Contributor/API docs and installed wheel/sdist API verification. Detector
+  internals remain private and Python interfaces remain pre-1.0.
+
 ## Next: analysis and review contracts
 
 1. Evaluate Spark-version targeting against documented API differences before
    adding version-dependent advice. Vendor-specific behavior needs explicit limits.
-2. Separate semantic facts/state transitions from detectors. First migrate
-   TL001–TL003 with identical regression outputs, then prove the interface with
-   one narrowly evidenced rule. Do not freeze a public plugin API prematurely.
-3. Design immutable public scanner/report objects after the internal boundary is
-   proven. Preserve CLI/JSON/fingerprint compatibility and avoid exposing analyzer state.
-4. Evaluate severity and confidence policy without presenting unmeasured precision
+2. Exercise the internal detector boundary on further independently justified
+   rules before considering a public plugin API. Preserve CLI/JSON/fingerprint
+   compatibility and avoid exposing analyzer state.
+3. Evaluate severity and confidence policy without presenting unmeasured precision
    as fact. Keep existing warnings and no semantics-changing automatic fixes.
-5. Add Git-base comparison only with explicit rename, shallow-clone, deleted-file,
+4. Add Git-base comparison only with explicit rename, shallow-clone, deleted-file,
    notebook, and error behavior. Baselines alone are not diff analysis.
 
 ## Notebook and integration work
@@ -52,4 +61,4 @@ Spark identity analysis.
 A 1.0 decision should be gated on stable interfaces, reproducible real-world
 quality evidence, and dependable CI ergonomics—not a target rule count. The
 synthetic corpus is regression coverage, not production accuracy. No external
-review, benchmark, performance, or broad-roadmap completion is implied by v0.3.0.
+review, benchmark, performance, or broad-roadmap completion is implied by v0.4.0.

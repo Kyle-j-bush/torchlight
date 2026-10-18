@@ -40,7 +40,7 @@ exports are treated as Python, without special source-notebook magic semantics.
   exports and carefully bounded driver work can be legitimate.
 - No rule applies a semantics-changing automatic fix.
 - Suppressions require specific rule IDs and nonempty reasons; annotate the
-  reported write for TL002, not an earlier `coalesce(1)` assignment.
+  reported write for TL002/TL004, not an earlier partition-changing assignment.
 - A clean scan means no supported pattern was found. It does not mean every
   cell was analyzed or that the job is safe, correct, or efficient.
 

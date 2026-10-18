@@ -16,9 +16,9 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-**v0.3.0** adds shared project configuration, stable finding fingerprints,
-reviewed-debt baselines, and SARIF for GitHub Code Scanning. The three contextual
-safety checks were introduced in v0.2.0; v0.1.0 only matched method names.
+**v0.4.0** adds a public Python scanner API and evidence-backed single-partition
+write checks for `repartition(1)`. Shared configuration, fingerprints, baselines,
+and SARIF shipped in v0.3.0; v0.1.0 only matched method names.
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -36,13 +36,14 @@ python -m torchlight jobs/ notebooks/
 # Or: python main.py <paths...>
 ```
 
-## Three focused checks
+## Four focused checks
 
 | Rule | What deserves review | What is not automatically wrong |
 | --- | --- | --- |
 | **TL001** | `.collect()` or `.toPandas()` on a known Spark DataFrame without a recognized row bound | An intentional small result, or a literal `.limit(100)` before collection |
 | **TL002** | A known `.coalesce(1)` feeding a terminal DataFrame write | A small single-partition export; `.coalesce()` without a write is not reported |
 | **TL003** | Assigning `.withColumn()` back to a loop-carried DataFrame | A fresh DataFrame each iteration, independent projections, or a known single-iteration loop |
+| **TL004** | A known literal `.repartition(1)` feeding a terminal DataFrame write | A small intentional export; no warning for repartition alone or restored parallelism |
 
 **`.distinct()` alone is not a finding.** It often expresses a legitimate requirement.
 
@@ -94,7 +95,7 @@ or above the working directory.
 
 ```toml
 [tool.torchlight]
-select = ["TL001", "TL002", "TL003"]
+select = ["TL001", "TL002", "TL003", "TL004"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
 # Optional, after capturing and reviewing existing debt:
@@ -156,7 +157,7 @@ Add the isolated-install hook to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: torchlight
 ```
@@ -213,6 +214,23 @@ implemented**; complete supplied files are still analyzed.
 **A clean scan means no supported pattern was found—not that every cell was
 analyzed, or that the job is safe or efficient.** Review findings in context.
 
+## Python integrations
+
+```python
+from pathlib import Path
+from torchlight import Config, Scanner
+
+config = Config.from_pyproject(Path("pyproject.toml"))
+report = Scanner(config=config).scan([Path("jobs"), Path("notebooks")])
+print(report.render("json"))
+raise SystemExit(report.exit_code)
+```
+
+Policy and results are immutable; scanning prints nothing and never executes
+source. `Scanner()` uses built-in policy without implicit configuration discovery.
+See the [Python API reference](docs/python-api.md) for paths, baselines, errors,
+and the pre-1.0 compatibility policy.
+
 ## Regression coverage
 
 ```sh
@@ -220,7 +238,7 @@ python -m unittest discover -s tests
 python -m scripts.check_benchmark
 ```
 
-The [public corpus](benchmarks/README.md) has 30 labeled **synthetic** Python and
+The [public corpus](benchmarks/README.md) has 36 labeled **synthetic** Python and
 notebook cases, including intentional uses and unrelated methods. It is regression
 coverage, not a measured production accuracy claim. Next comes validation with
 real Spark reviewers and permissioned code before adding more rules.

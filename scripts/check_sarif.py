@@ -31,6 +31,7 @@ SOURCE = (
     "df = SparkSession.builder.getOrCreate().table('events')\n"
     "df.collect()\n"
     "df.coalesce(1).write.parquet('out')\n"
+    "df.repartition(1).write.parquet('out')\n"
     "for name in names:\n    df = df.withColumn(name, expr)\n"
 )
 
