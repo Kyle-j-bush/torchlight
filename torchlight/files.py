@@ -9,6 +9,7 @@ from pathlib import Path
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.diagnostics import Finding
 from torchlight.notebooks import scan_notebook
+from torchlight.suppressions import apply_suppressions
 
 SOURCE_SUFFIXES = {".py", ".ipynb"}
 
@@ -45,7 +46,7 @@ def scan_python(
         return [], [f"{path}: {format_syntax_error(exc)}"]
 
     analyzer = SparkAnalyzer(str(path), assume_sessions)
-    return analyzer.analyze(tree, source), []
+    return apply_suppressions(source, analyzer.analyze(tree, source), str(path))
 
 
 def scan_file(

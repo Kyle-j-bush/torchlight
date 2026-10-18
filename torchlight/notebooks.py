@@ -9,6 +9,7 @@ from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.diagnostics import Finding
+from torchlight.suppressions import apply_suppressions
 
 PYTHON_CELL_MAGICS = {"capture", "debug", "prun", "time", "timeit"}
 
@@ -26,10 +27,10 @@ def prepare_cell(source: str) -> str | None:
     )
 
 
-def _parse_cell(source: str, filename: str) -> ast.Module | None:
+def _parse_cell(source: str, filename: str) -> tuple[ast.Module, str] | None:
     """Try Python first so magic-like text inside strings stays untouched."""
     try:
-        return parse_source(source, filename)
+        return parse_source(source, filename), source
     except SyntaxError:
         # These magics can replace bindings or execute Python we cannot inspect.
         # Do not retain type assumptions through them, even within this cell.
@@ -40,7 +41,7 @@ def _parse_cell(source: str, filename: str) -> ast.Module | None:
                 if magic and magic[0] != "matplotlib":
                     return None
         cleaned = prepare_cell(source)
-        return None if cleaned is None else parse_source(cleaned, filename)
+        return None if cleaned is None else (parse_source(cleaned, filename), cleaned)
 
 
 def scan_notebook(
@@ -82,15 +83,20 @@ def scan_notebook(
             analyzer.forget()
             continue
         try:
-            tree = _parse_cell(source, filename)
+            parsed = _parse_cell(source, filename)
         except (SyntaxError, ValueError) as exc:
             errors.append(f"{filename}: {format_syntax_error(exc)}")
             analyzer.forget()
             continue
-        if tree is None:
+        if parsed is None:
             analyzer.forget()
             continue
 
-        findings.extend(analyzer.analyze(tree, source, number))
+        tree, source = parsed
+        cell_findings, cell_errors = apply_suppressions(
+            source, analyzer.analyze(tree, source, number), str(path), number
+        )
+        findings.extend(cell_findings)
+        errors.extend(cell_errors)
 
     return findings, errors
