@@ -8,25 +8,12 @@ from dataclasses import dataclass, replace
 
 from torchlight.diagnostics import RULES, Finding, Location
 
-SPARK_METHODS = {"collect", "distinct"}
 PARSE_FLAGS = ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
 
 
 def parse_source(source: str, filename: str) -> ast.Module:
     """Parse Python source, allowing top-level await as Jupyter notebooks do."""
     return compile(source, filename, "exec", flags=PARSE_FLAGS, dont_inherit=True)
-
-
-def find_spark_calls(tree: ast.Module) -> list[tuple[str, int]]:
-    """Legacy name-only scanner, retained until the file scanners migrate."""
-    calls = [
-        (node.func.attr, node.lineno)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr in SPARK_METHODS
-    ]
-    return sorted(calls, key=lambda call: call[1])
 
 
 def format_syntax_error(exc: Exception) -> str:
