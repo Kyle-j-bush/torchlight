@@ -10,8 +10,6 @@ from pathlib import Path
 
 from torchlight.baseline import (
     BaselineError,
-    new_findings,
-    read_baseline,
     validate_destination,
     write_baseline,
 )
@@ -22,8 +20,8 @@ from torchlight.config import (
     validate_pattern,
 )
 from torchlight.diagnostics import RULES
-from torchlight.files import SOURCE_SUFFIXES, iter_source_files, scan_file
 from torchlight.reporting import render
+from torchlight.scanner import Scanner
 
 
 def report_error(message: str) -> None:
@@ -133,9 +131,6 @@ def exclude_pattern(value: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    findings = []
-    errors = []
-    seen = set()
     try:
         config = load_config(config_path=args.config, no_config=args.no_config)
     except ConfigError as exc:
@@ -161,13 +156,15 @@ def main(argv: list[str] | None = None) -> int:
             )
     config = replace(config, **overrides)
     try:
-        baseline_path = args.baseline or config.baseline
+        baseline_path = (
+            args.baseline.absolute() if args.baseline is not None else config.baseline
+        )
         if args.no_baseline or args.write_baseline is not None:
             baseline_path = None
-        baseline = read_baseline(baseline_path) if baseline_path is not None else None
+        config = replace(config, baseline=baseline_path)
         if args.write_baseline is not None:
             validate_destination(args.write_baseline)
-    except BaselineError as exc:
+    except (BaselineError, ConfigError) as exc:
         message = f"baseline error: {exc}"
         output = render([], [message], args.format, root=config.root)
         if output:
@@ -175,37 +172,8 @@ def main(argv: list[str] | None = None) -> int:
         report_error(message)
         return 2
 
-    for path in args.paths:
-        if path.exists() and config.is_excluded(path):
-            continue
-        if path.is_dir():
-            files = iter_source_files(path, is_excluded=config.is_excluded)
-        elif path.is_file() and path.suffix in SOURCE_SUFFIXES:
-            files = [path]
-        else:
-            reason = (
-                "unsupported file type (expected .py or .ipynb)"
-                if path.exists()
-                else "no such file or directory"
-            )
-            errors.append(f"{path}: {reason}")
-            continue
-
-        for file in files:
-            resolved = file.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            file_findings, file_errors = scan_file(
-                file, assume_sessions=config.assume_sessions
-            )
-            findings.extend(
-                f for f in file_findings if f.rule_id in config.enabled_rules
-            )
-            errors.extend(file_errors)
-
-    if baseline is not None:
-        findings = new_findings(findings, baseline, config.root)
+    report = Scanner(config=config).scan(args.paths)
+    findings, errors = list(report.findings), list(report.errors)
     if args.write_baseline is not None and not errors:
         try:
             write_baseline(args.write_baseline, findings, config.root)

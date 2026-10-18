@@ -1,4 +1,4 @@
-# Copy to .github/workflows/ in a repository using Torchlight v0.3.0+.
+# Copy to .github/workflows/ in a repository using Torchlight v0.4.0+.
 name: Torchlight review
 
 on:
@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Torchlight
-        run: python -m pip install torchlight-spark==0.3.0
+        run: python -m pip install torchlight-spark==0.4.0
       - name: Generate complete SARIF report
         id: scan
         shell: bash

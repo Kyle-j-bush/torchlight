@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0 — 2026-10-18
+
+### Added
+
+- **TL004:** a literal `repartition(1)` on a known Spark DataFrame feeding a
+  recognized V1/V2 terminal write, with source provenance, notebook state,
+  reasoned suppression, and conservative invalidation after partition changes.
+  Coalesce provenance keeps TL002 without duplicate write warnings. This is a
+  review request, not proof of a slow job or a promise of one output file.
+- Public `Config`, `ConfigError`, `Scanner`, `ScanReport`, `Finding`, `Location`,
+  and `Rule` imports. Immutable policy/results, explicit TOML loading, read-only
+  baseline filtering, fresh analysis state per scan, and all four output formats.
+  The API defaults to built-in policy; CLI configuration discovery is unchanged.
+- Internal semantic-fact/detector boundary, contributor guide, and v0.3.0 golden
+  JSON/text/fingerprint tests for the original rules. This is not a plugin API.
+- Six additional synthetic corpus cases (36 total), positive/negative and
+  metamorphic TL004 tests, public API/CLI parity tests, and installed API checks.
+
+### Changed
+
+- The CLI and Python API share scan orchestration. Directory discovery failures
+  are surfaced as scan errors rather than silently appearing clean.
+- Programmatic Config values are validated and caller-owned collections copied
+  into immutable containers. Relative baseline paths are anchored to project root.
+
+TL004 is enabled by default; use explicit rule selection or ignore it when
+upgrading if needed. Existing TL001–TL003 output and fingerprints, JSON schema 1,
+baseline schema 1, and the CLI 0/1/2 exit contract are retained. No new runtime
+dependencies, confidence claims, configurable severities, or autofixes. Python
+3.12+ remains required. The Python API is pre-1.0; incompatible changes require a
+minor release and release notes. Real-world validation and the rest of the
+research roadmap remain follow-up work, not completed benchmark claims.
+
 ## 0.3.0 — 2026-10-18
 
 ### Added

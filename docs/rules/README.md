@@ -10,6 +10,7 @@ confidence tiers are not implemented.
 | [TL001](TL001.md) | Potential driver-memory risk |
 | [TL002](TL002.md) | Potential single-partition write bottleneck |
 | [TL003](TL003.md) | Loop-carried withColumn() can grow the logical plan |
+| [TL004](TL004.md) | Potential single-partition write bottleneck from repartition(1) |
 
 ## TL001: Potential driver-memory risk
 
@@ -34,3 +35,11 @@ Repeatedly assigning withColumn() back to the same DataFrame in a loop can build
 **Review:** Consider constructing the expressions together with select() or withColumns(). Preserve dependencies between columns; this is not a safe automatic rewrite.
 
 [Examples, evidence, and limitations](TL003.md).
+
+## TL004: Potential single-partition write bottleneck from repartition(1)
+
+repartition(1) shuffles the result into one partition before the write, limiting write parallelism. This can be intentional for small exports; it does not guarantee exactly one output file.
+
+**Review:** Review whether one output partition is required. For large outputs, keep suitable parallelism; do not automatically replace repartition with coalesce, which has different execution behavior.
+
+[Examples, evidence, and limitations](TL004.md).

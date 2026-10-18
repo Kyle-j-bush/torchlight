@@ -70,6 +70,11 @@ described in [SECURITY.md](SECURITY.md).
   changes in `CHANGELOG.md`. Scanners return structured `Finding` objects.
 - Keep the [curated rule guides](docs/rules/README.md) current and regenerate the
   catalog with `python -m scripts.generate_rule_docs` after metadata changes.
+- Follow the [internal detector guide](docs/development/detectors.md): rules consume
+  semantic facts instead of reimplementing receiver inference. Keep the original
+  rules' golden output/fingerprint tests intact; no public plugin API is promised.
+- Preserve the [public Python API](docs/python-api.md) and CLI parity. Incompatible
+  pre-1.0 API changes require minor-release notes; keep AST/state internals private.
 - Configuration discovery, precedence, and glob semantics are compatibility
   contracts; add positive and negative tests before changing them. See the
   [configuration reference](docs/configuration.md).

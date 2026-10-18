@@ -1,10 +1,11 @@
 # Project configuration
 
 Available in v0.3.0+. Older releases do not read project configuration.
+TL004 in the example below requires v0.4.0+.
 
 ```toml
 [tool.torchlight]
-select = ["TL001", "TL002", "TL003"]
+select = ["TL001", "TL002", "TL003", "TL004"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
 assume-spark-session = ["spark"]
@@ -20,7 +21,7 @@ configuration errors in their structured output. Python config is never executed
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `select` | All three current rule IDs | Rules to enable. `[]` disables all findings, not scan errors. |
+| `select` | All current rule IDs | Rules to enable. `[]` disables all findings, not scan errors. |
 | `ignore` | `[]` | Rules to disable; ignore wins over select. |
 | `exclude` | `[]` | Project-relative file/directory globs; also apply to explicitly named existing paths. |
 | `assume-spark-session` | `[]` | Existing names explicitly treated as SparkSession objects. Names must be Python identifiers, not keywords. |

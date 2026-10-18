@@ -2,12 +2,12 @@
 
 **Status:** protocol only, October 18, 2026. No real-world corpus has been collected
 or independently labeled, and no production accuracy figures are claimed. The
-existing [30 synthetic cases](README.md) remain regression coverage, not benchmark
+existing [36 synthetic cases](README.md) remain regression coverage, not benchmark
 evidence. Do not execute any submitted source or notebook cells.
 
 ## Research questions
 
-For each of TL001, TL002, and TL003, measure whether the warning is worth a Spark
+For each of TL001–TL004, measure whether the warning is worth a Spark
 reviewer's attention, how often relevant sites are missed, and the cost of
 scanning. Report Python and notebook results separately. Do not rank tools or
 claim runtime savings from source-pattern counts.
@@ -47,7 +47,7 @@ an unqualified overall prevalence or false-positives-per-KLOC claim.
 ## 3. Independent source audit
 
 Two Spark reviewers independently audit the complete sampled files **without
-seeing Torchlight output**. Enumerate candidate sites for all three rules,
+seeing Torchlight output**. Enumerate candidate sites for all four rules,
 including intentional uses, non-Spark lookalikes, and sites the scanner cannot
 currently resolve. This independent inventory is needed for recall; labeling only
 emitted warnings can measure precision but cannot establish recall.
@@ -97,9 +97,9 @@ execution trace. All code remains inert; do not install or import target project
 ## 5. Match and compute per-rule metrics
 
 Match emitted and independently audited sites on snapshot, relative path, rule
-ID, code-cell number, and the reviewed call's source span. TL002 is matched at
-the terminal write, not `coalesce(1)`. Manually adjudicate ambiguous multi-call
-lines. Match one diagnostic to one site; duplicates are excess diagnostics, not
+ID, code-cell number, and the reviewed call's source span. TL002 and TL004 match at
+the terminal write, not the partition-changing call. Manually adjudicate ambiguous
+multi-call lines. Match one diagnostic to one site; duplicates are excess diagnostics, not
 extra true positives. Current coordinates are snapshot-specific and are **not**
 a proposed persistent finding fingerprint.
 
