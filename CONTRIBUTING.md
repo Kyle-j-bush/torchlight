@@ -21,10 +21,11 @@ On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
    ```sh
    python -m ruff check .
    python -m ruff format --check .
-   python -m unittest discover -s tests -v
+    python -m unittest discover -s tests -v
+    python -m scripts.check_benchmark
    ```
 
-   To fix formatting, run `python -m ruff format .`.
+    To fix formatting, run `python -m ruff format .`.
 
 5. Push your branch and open a pull request against `main`.
 
@@ -36,8 +37,12 @@ python -m twine check --strict dist/*
 python scripts/check_distribution.py
 ```
 
-Start with an empty `dist/` directory so that old versions are not tested or
-published accidentally. The verification script installs each archive in a
+Start with an empty build directory so that old versions are not tested or
+published accidentally. To avoid disturbing existing `dist/` artifacts, build
+into a fresh directory with `python -m build --outdir <directory>` and verify it
+with `python scripts/check_distribution.py --dist-dir <directory>`.
+
+The verification script installs each archive in a
 fresh virtual environment and checks metadata and license files, runs the test
 suite against the installed package, and tests both CLI entry points outside
 the source tree.
@@ -45,6 +50,33 @@ the source tree.
 Do not commit credentials, private data, virtual environments, or notebook
 outputs containing sensitive information. Report security issues privately as
 described in [SECURITY.md](SECURITY.md).
+
+## Adding or changing checks
+
+- Keep rule IDs in `torchlight/diagnostics.py` stable. Findings must contain
+  receiver/pattern evidence, a qualified explanation, and a useful review suggestion.
+- Do not turn unknown method names into Spark evidence. Prefer losing type
+  knowledge over propagating a guessed DataFrame through an unsupported API.
+- Add both positive and negative unit tests, including intentional uses and
+  unrelated receivers. Extend the [labeled regression corpus](benchmarks/README.md)
+  when changing analysis behavior. Fixture code must never be executed.
+- Test notebook state, scopes, aliases, and invalidation when relevant. A limit is
+  not a memory guarantee, and an expensive operation is not automatically wrong.
+- Do not add automatic rewrites that can change result semantics. Suppressions
+  must remain specific and reasoned; malformed directives must not hide findings.
+- Treat JSON fields and rule IDs as integration interfaces. Explain incompatible
+  changes in `CHANGELOG.md`. Scanners return structured `Finding` objects.
+
+To exercise the repository's hook manifest, install pre-commit in a development
+environment, then run:
+
+```sh
+pre-commit validate-manifest .pre-commit-hooks.yaml
+pre-commit try-repo . torchlight --all-files
+```
+
+Remote configurations should pin an immutable revision containing the manifest.
+Do not document an unreleased hook or CLI option as available in an older release.
 
 ## Main branch policy
 

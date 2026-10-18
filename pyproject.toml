@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "torchlight-spark"
 version = "0.1.0"
-description = "Scan Python files and Jupyter notebooks for Spark method calls."
+description = "Review Spark safety risks in Python files and notebooks without execution."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
