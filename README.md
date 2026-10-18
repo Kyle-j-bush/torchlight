@@ -84,6 +84,28 @@ reasons are scan errors, not silent ignores. Directives only apply to that line
 and cell, not the whole file. For TL002, annotate the **write**, where the finding
 is reported, rather than an earlier `.coalesce(1)` assignment.
 
+### Shared project policy (unreleased)
+
+The current development checkout also reads `[tool.torchlight]` from the nearest
+`pyproject.toml` at or above the working directory. **This is not in v0.2.0**;
+install a checkout containing this feature with `python -m pip install .`.
+
+```toml
+[tool.torchlight]
+select = ["TL001", "TL002", "TL003"]
+ignore = []
+exclude = ["generated/**", "vendor/**"]
+# Opt in only if your environment supplies a session:
+# assume-spark-session = ["spark"]
+```
+
+One policy applies to the entire run, including pre-commit's explicit files.
+`--config PATH` replaces discovery; `--no-config` bypasses it. Explicit CLI values
+replace the corresponding configured lists; ignored rules still win. Excludes
+are relative to the config file's directory and also skip explicit existing
+inputs. Invalid settings fail before scanning. See the
+[configuration reference](docs/configuration.md) for exact precedence and globs.
+
 ### Managed notebook sessions
 
 Torchlight recognizes Spark imports, session builders, common DataFrame-producing
@@ -170,6 +192,15 @@ The [public corpus](benchmarks/README.md) has 30 labeled **synthetic** Python an
 notebook cases, including intentional uses and unrelated methods. It is regression
 coverage, not a measured production accuracy claim. Next comes validation with
 real Spark reviewers and permissioned code before adding more rules.
+The [real-world benchmark protocol](benchmarks/real-world-protocol.md) specifies
+permission, independent labeling, and per-rule metrics; no results are claimed yet.
+
+## Documentation
+
+Start with the [user guides](docs/README.md), [rule catalog](docs/rules/README.md),
+and [analysis boundaries](docs/analysis.md). The
+[Python compatibility assessment](docs/development/python-compatibility.md)
+explains why the supported scanner runtime remains Python 3.12+ for now.
 
 ## Development and security
 

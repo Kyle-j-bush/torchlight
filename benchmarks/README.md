@@ -23,3 +23,8 @@ For a new rule or bug fix, add a minimal positive case and a related negative ca
 with an explanation. Never contribute private notebooks, credentials, or data.
 The next validation step is independently labeled, permissioned real-world code
 and feedback from Spark reviewers, including dismissed findings and missed risks.
+
+The [draft real-world protocol](real-world-protocol.md) defines permission records,
+frozen project-level splits, independent source audits, adjudication, per-rule
+precision/recall and reviewer burden, plus performance reporting. It is a plan,
+not a collected dataset or a claim of measured accuracy.
