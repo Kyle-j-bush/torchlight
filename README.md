@@ -12,17 +12,17 @@ execute your code, import Spark, or send your source to an API.
 
 Requires Python 3.12+. No third-party runtime dependencies.
 
-## Try the development version
+## Install and run
 
-**These safety checks are unreleased.** The published `0.1.0` package is the older,
-method-name-only scanner. Install this checkout to try the behavior documented here:
+The safety checks below are available in **0.2.0**. The older `0.1.0` release only
+matched method names.
 
 ```sh
-python -m pip install .
+python -m pip install --upgrade torchlight-spark
 torchlight path/to/file.py path/to/notebook.ipynb path/to/directory
 ```
 
-For an isolated development installation, use `pipx install .`. The distribution
+For an isolated installation, use `pipx install torchlight-spark`. The distribution
 is named `torchlight-spark`; its command and import package are `torchlight`.
 Do not install it alongside the unrelated `torchlight` PyPI distribution.
 
@@ -115,25 +115,20 @@ annotations with cell locations in the message, not misleading JSON line numbers
 Exit codes: **0** = no findings or errors, **1** = findings (even with errors),
 **2** = errors only. A CI step therefore fails on any enabled, unsuppressed finding.
 
-After installing the development checkout in your environment, a local
-`.pre-commit-config.yaml` can use:
+Add the isolated-install hook to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: local
+  - repo: https://github.com/Kyle-j-bush/torchlight
+    rev: v0.2.0
     hooks:
       - id: torchlight
-        name: Torchlight Spark safety checks
-        entry: torchlight
-        language: system
-        types: [file]
-        files: '\.(py|ipynb)$'
 ```
 
-The repository also provides an isolated-install hook manifest. Try it with
-`pre-commit try-repo . torchlight --all-files`. When using a remote hook, pin a
-full commit SHA or immutable release containing the manifest; `v0.1.0` does not
-contain it.
+Pin a full commit SHA or immutable release containing the hook manifest;
+`v0.1.0` does not contain it. To try a local checkout instead, run
+`pre-commit try-repo . torchlight --all-files`. For development, install the
+checkout with `python -m pip install .` or run `python -m torchlight` from it.
 
 Baselines and comparison against a PR's base revision are **not implemented yet**.
 Current runs report all enabled findings in the supplied paths, not just new ones.
