@@ -71,9 +71,11 @@ SHUFFLING_METHODS = {
     "dropDuplicates",
     "drop_duplicates",
     "join",
+    "orderBy",
     "repartition",
     "repartitionByRange",
     "subtract",
+    "sort",
     "union",
     "unionAll",
     "unionByName",
@@ -82,7 +84,6 @@ EXPANDING_METHODS = {
     "join",
     "sample",
     "selectExpr",
-    "transform",
     "union",
     "unionAll",
     "unionByName",
@@ -117,6 +118,14 @@ V2_WRITE_METHODS = {
     "overwrite",
     "overwritePartitions",
     "replace",
+}
+GENERATORS = {
+    "explode",
+    "explode_outer",
+    "posexplode",
+    "posexplode_outer",
+    "inline",
+    "inline_outer",
 }
 
 
@@ -199,6 +208,15 @@ def literal_integer(node: ast.expr) -> int | None:
         value = literal_integer(node.operand)
         return -value if value is not None else None
     return None
+
+
+def integer_argument(node: ast.Call, keyword: str) -> int | None:
+    argument = (
+        node.args[0]
+        if node.args
+        else next((kw.value for kw in node.keywords if kw.arg == keyword), None)
+    )
+    return literal_integer(argument) if argument is not None else None
 
 
 class SparkAnalyzer(ast.NodeVisitor):
@@ -310,6 +328,8 @@ class SparkAnalyzer(ast.NodeVisitor):
             return None
         if value.kind == "module":
             symbol = f"{value.origin}.{name}"
+            if value.origin == "pyspark.sql.functions" and name in GENERATORS:
+                return Value("generator", symbol)
             if symbol in {
                 "pyspark.sql.SparkSession",
                 "pyspark.sql.session.SparkSession",
@@ -326,6 +346,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 "pyspark.sql",
                 "pyspark.sql.session",
                 "pyspark.sql.dataframe",
+                "pyspark.sql.functions",
                 "pyspark.sql.connect",
                 "pyspark.sql.connect.session",
                 "pyspark.sql.connect.dataframe",
@@ -372,6 +393,8 @@ class SparkAnalyzer(ast.NodeVisitor):
             return value
         if isinstance(node, ast.IfExp):
             self._expr(node.test)
+            if isinstance(node.test, ast.Constant):
+                return self._expr(node.body if node.test.value else node.orelse)
             initial = self.state.copy()
             left = self._expr(node.body)
             left_state = self.state.copy()
@@ -381,9 +404,19 @@ class SparkAnalyzer(ast.NodeVisitor):
             return self._merge_value(left, right)
         if isinstance(node, ast.BoolOp):
             branches = []
-            for expression in node.values:
+            for index, expression in enumerate(node.values):
                 self._expr(expression)
-                branches.append(self.state.copy())
+                if isinstance(expression, ast.Constant):
+                    stops = (isinstance(node.op, ast.And) and not expression.value) or (
+                        isinstance(node.op, ast.Or) and expression.value
+                    )
+                    if stops:
+                        branches.append(self.state.copy())
+                        break
+                if index == len(node.values) - 1 or not isinstance(
+                    expression, ast.Constant
+                ):
+                    branches.append(self.state.copy())
             self.state = self._merge(*branches)
             return None
         if isinstance(node, ast.Lambda):
@@ -503,32 +536,30 @@ class SparkAnalyzer(ast.NodeVisitor):
         bound, single = value.row_limit, value.single_partition
         if name in EXPANDING_METHODS or self._has_generator(node):
             bound = None
-        if name == "limit":
-            argument = (
-                node.args[0]
-                if node.args
-                else next((kw.value for kw in node.keywords if kw.arg == "num"), None)
+        if name == "sample":
+            replacement = next(
+                (kw.value for kw in node.keywords if kw.arg == "withReplacement"),
+                node.args[0] if node.args else ast.Constant(value=False),
             )
-            limit = literal_integer(argument) if argument is not None else None
+            if isinstance(replacement, ast.Constant) and replacement.value is False:
+                bound = value.row_limit
+        if name == "limit":
+            limit = integer_argument(node, "num")
             if limit is not None and limit >= 0:
                 bound = limit if bound is None else min(bound, limit)
         if name in SHUFFLING_METHODS:
-            single = None
+            # Repartitioning back to one partition does not remove this bottleneck.
+            if (
+                name not in {"repartition", "repartitionByRange"}
+                or integer_argument(node, "numPartitions") != 1
+            ):
+                single = None
         if name == "coalesce":
-            argument = (
-                node.args[0]
-                if node.args
-                else next(
-                    (kw.value for kw in node.keywords if kw.arg == "numPartitions"),
-                    None,
-                )
-            )
-            if argument is not None and literal_integer(argument) == 1:
+            if integer_argument(node, "numPartitions") == 1:
                 single = self._location(node)
         return replace(value, row_limit=bound, single_partition=single)
 
-    @staticmethod
-    def _has_generator(node: ast.Call) -> bool:
+    def _has_generator(self, node: ast.Call) -> bool:
         for argument in [*node.args, *(kw.value for kw in node.keywords)]:
             for child in ast.walk(argument):
                 if isinstance(child, ast.Call):
@@ -537,14 +568,10 @@ class SparkAnalyzer(ast.NodeVisitor):
                         if isinstance(child.func, ast.Attribute)
                         else (child.func.id if isinstance(child.func, ast.Name) else "")
                     )
-                    if name in {
-                        "explode",
-                        "explode_outer",
-                        "posexplode",
-                        "posexplode_outer",
-                        "inline",
-                        "inline_outer",
-                    }:
+                    alias = self.state.get(name)
+                    if name in GENERATORS or (
+                        alias is not None and alias.kind == "generator"
+                    ):
                         return True
         return False
 
@@ -556,7 +583,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 (
                     value.origin,
                     f"coalesce(1) at {value.single_partition.describe()} feeds this write; "
-                    "no intervening repartition or other partition-changing operation recognized.",
+                    "no operation recognized that restores multiple output partitions.",
                 ),
             )
 
@@ -701,8 +728,14 @@ class SparkAnalyzer(ast.NodeVisitor):
     def visit_For(self, node):
         self._expr(node.iter)
         repetitions = None
-        if isinstance(node.iter, (ast.List, ast.Tuple, ast.Set)):
+        if isinstance(node.iter, (ast.List, ast.Tuple)) and not any(
+            isinstance(element, ast.Starred) for element in node.iter.elts
+        ):
             repetitions = len(node.iter.elts)
+        elif isinstance(node.iter, ast.Set) and all(
+            isinstance(element, ast.Constant) for element in node.iter.elts
+        ):
+            repetitions = len({element.value for element in node.iter.elts})
         elif (
             isinstance(node.iter, ast.Call)
             and isinstance(node.iter.func, ast.Name)

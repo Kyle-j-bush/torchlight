@@ -117,6 +117,33 @@ class SparkAnalysisTests(unittest.TestCase):
             with self.subTest(expression=expression):
                 self.assertEqual(self.codes(f"{expression}.collect()"), ["TL001"])
 
+    def test_generator_import_aliases_drop_row_bounds(self):
+        self.assertEqual(
+            self.codes(
+                "from pyspark.sql.functions import explode as expand\n"
+                "df.limit(10).select(expand('items')).collect()"
+            ),
+            ["TL001"],
+        )
+        self.assertEqual(
+            self.codes(
+                "from pyspark.sql import functions as F\n"
+                "df.limit(10).select(F.explode_outer('items')).collect()"
+            ),
+            ["TL001"],
+        )
+
+    def test_sampling_without_replacement_preserves_row_bounds(self):
+        for arguments in (
+            "False, 0.5",
+            "withReplacement=False, fraction=0.5",
+            "fraction=0.5",
+        ):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(
+                    self.codes(f"df.limit(10).sample({arguments}).collect()"), []
+                )
+
     def test_coalesce_only_warns_when_it_feeds_a_write(self):
         self.assertEqual(self.codes("df.coalesce(1)"), [])
         findings = self.analyze(
@@ -152,6 +179,12 @@ class SparkAnalysisTests(unittest.TestCase):
         self.assertEqual(
             self.codes("df.coalesce(1).coalesce(4).write.parquet(path)"), ["TL002"]
         )
+        self.assertEqual(
+            self.codes("df.coalesce(1).repartition(1).write.parquet(path)"), ["TL002"]
+        )
+        self.assertEqual(
+            self.codes("df.coalesce(1).orderBy('x').write.parquet(path)"), []
+        )
 
     def test_loop_carried_withcolumn(self):
         for loop in ("for name in columns:", "for name in range(5):", "while more:"):
@@ -178,7 +211,7 @@ class SparkAnalysisTests(unittest.TestCase):
                 self.assertEqual(
                     self.codes(f"base = df\nfor name in columns:\n    {body}"), []
                 )
-        for iterator in ("[]", "['x']", "range(0)", "range(1)"):
+        for iterator in ("[]", "['x']", "{'x', 'x'}", "range(0)", "range(1)"):
             with self.subTest(iterator=iterator):
                 self.assertEqual(
                     self.codes(
@@ -192,6 +225,21 @@ class SparkAnalysisTests(unittest.TestCase):
             ),
             [],
         )
+
+    def test_starred_loop_iterables_are_not_treated_as_singletons(self):
+        self.assertEqual(
+            self.codes("for name in [*columns]:\n    df = df.withColumn(name, expr)"),
+            ["TL003"],
+        )
+
+    def test_literal_short_circuits_do_not_report_unreachable_calls(self):
+        for expression in (
+            "False and df.collect()",
+            "True or df.collect()",
+            "df.collect() if False else []",
+        ):
+            with self.subTest(expression=expression):
+                self.assertEqual(self.codes(expression), [])
 
     def test_annotations_including_forward_references(self):
         for annotation in ("DataFrame", "'DataFrame'", "sql.DataFrame"):
