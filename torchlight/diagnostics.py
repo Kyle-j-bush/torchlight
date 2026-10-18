@@ -92,5 +92,6 @@ class Finding:
         return (
             f"{self.path}:{position}: {self.rule_id}: {self.message}\n"
             f"{evidence}\n"
+            f"  Why: {self.rule.explanation}\n"
             f"  Review: {self.rule.recommendation}"
         )
