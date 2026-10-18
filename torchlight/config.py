@@ -12,7 +12,7 @@ from pathlib import Path
 
 from torchlight.diagnostics import RULES
 
-CONFIG_KEYS = {"select", "ignore", "exclude", "assume-spark-session"}
+CONFIG_KEYS = {"select", "ignore", "exclude", "assume-spark-session", "baseline"}
 
 
 class ConfigError(ValueError):
@@ -71,6 +71,7 @@ class Config:
     exclude: tuple[str, ...] = ()
     assume_sessions: tuple[str, ...] = ()
     root: Path = field(default_factory=Path.cwd)
+    baseline: Path | None = None
 
     @property
     def enabled_rules(self) -> frozenset[str]:
@@ -134,7 +135,12 @@ def read_config(path: Path, *, explicit: bool = False) -> Config:
         if unknown:
             raise ConfigError(f"unknown setting(s): {', '.join(sorted(unknown))}")
 
-        values = {key: _strings(table, key) for key in table}
+        values = {key: _strings(table, key) for key in table if key != "baseline"}
+        baseline = table.get("baseline")
+        if "baseline" in table and (
+            not isinstance(baseline, str) or not baseline.strip() or "\x00" in baseline
+        ):
+            raise ConfigError("baseline must be a nonempty path string")
         for key in ("select", "ignore"):
             unknown_rules = set(values.get(key, ())) - RULES.keys()
             if unknown_rules:
@@ -154,6 +160,7 @@ def read_config(path: Path, *, explicit: bool = False) -> Config:
             exclude=values.get("exclude", ()),
             assume_sessions=values.get("assume-spark-session", ()),
             root=path.parent.resolve(),
+            baseline=path.parent / baseline if baseline is not None else None,
         )
     except (OSError, ValueError) as exc:
         raise ConfigError(f"{path}: {exc}") from exc

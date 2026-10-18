@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/Kyle-j-bush/torchlight/actions/workflows/ci.yml/badge.svg)](https://github.com/Kyle-j-bush/torchlight/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Kyle-j-bush/torchlight/actions/workflows/codeql.yml/badge.svg)](https://github.com/Kyle-j-bush/torchlight/actions/workflows/codeql.yml)
+[![PyPI](https://img.shields.io/pypi/v/torchlight-spark)](https://pypi.org/project/torchlight-spark/)
+[![Python](https://img.shields.io/pypi/pyversions/torchlight-spark)](https://pypi.org/project/torchlight-spark/)
 
 **Review risky Spark changes before they reach production—without running a cluster.**
 
@@ -14,8 +16,9 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-The safety checks below are available in **0.2.0**. The older `0.1.0` release only
-matched method names.
+**v0.3.0** adds shared project configuration, stable finding fingerprints,
+reviewed-debt baselines, and SARIF for GitHub Code Scanning. The three contextual
+safety checks were introduced in v0.2.0; v0.1.0 only matched method names.
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -84,17 +87,18 @@ reasons are scan errors, not silent ignores. Directives only apply to that line
 and cell, not the whole file. For TL002, annotate the **write**, where the finding
 is reported, rather than an earlier `.coalesce(1)` assignment.
 
-### Shared project policy (unreleased)
+### Shared project policy
 
-The current development checkout also reads `[tool.torchlight]` from the nearest
-`pyproject.toml` at or above the working directory. **This is not in v0.2.0**;
-install a checkout containing this feature with `python -m pip install .`.
+Torchlight v0.3.0+ reads `[tool.torchlight]` from the nearest `pyproject.toml` at
+or above the working directory.
 
 ```toml
 [tool.torchlight]
 select = ["TL001", "TL002", "TL003"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
+# Optional, after capturing and reviewing existing debt:
+# baseline = ".torchlight-baseline.json"
 # Opt in only if your environment supplies a session:
 # assume-spark-session = ["spark"]
 ```
@@ -126,23 +130,33 @@ these assumptions.
 ```sh
 torchlight --format json jobs/ notebooks/ > torchlight-report.json
 torchlight --format github jobs/ notebooks/
+torchlight --format sarif jobs/ notebooks/ > torchlight.sarif
 ```
 
 JSON uses `schema_version: 1` and includes `findings` and `errors`. Findings carry
 rule IDs, one-based line/column locations, optional code-cell numbers, evidence,
-explanations, recommendations, and source snippets. Errors also go to stderr.
+explanations, recommendations, source snippets, and versioned structural
+fingerprints. Errors also go to stderr.
 GitHub output produces escaped Actions annotations; notebooks use file-level
 annotations with cell locations in the message, not misleading JSON line numbers.
 
 Exit codes: **0** = no findings or errors, **1** = findings (even with errors),
-**2** = errors only. A CI step therefore fails on any enabled, unsuppressed finding.
+**2** = errors only. A CI step fails on any enabled, unsuppressed **new** finding
+when a baseline is active, or all findings without one. Scan errors are never
+baselined. Snapshot writing has the separate contract described below.
+
+For persistent Code Scanning history, upload a full SARIF report with
+`--no-baseline`, then enforce project policy separately. The
+[SHA-pinned workflow example](.github/examples/torchlight-code-scanning.yml)
+uploads before failing CI on findings. See [CI integration](docs/integrations.md)
+and [SARIF details](docs/reporting.md), including notebook navigation limits.
 
 Add the isolated-install hook to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: torchlight
 ```
@@ -152,8 +166,26 @@ Pin a full commit SHA or immutable release containing the hook manifest;
 `pre-commit try-repo . torchlight --all-files`. For development, install the
 checkout with `python -m pip install .` or run `python -m torchlight` from it.
 
-Baselines and comparison against a PR's base revision are **not implemented yet**.
-Current runs report all enabled findings in the supplied paths, not just new ones.
+### Adopt without fixing all existing debt
+
+```sh
+# Review the findings, then commit the snapshot.
+torchlight . --write-baseline .torchlight-baseline.json
+# Fail only on new findings; scan errors still fail.
+torchlight . --baseline .torchlight-baseline.json
+```
+
+Successful snapshot writing exits 0, even when it records findings. Any scan or
+write error exits 2 without changing the snapshot. Normal baseline-enabled scans
+retain the standard 0/1/2 exit contract. Put `baseline = ".torchlight-baseline.json"`
+in project policy to share it with local runs and hooks; `--no-baseline` shows
+everything again.
+
+Fingerprints ignore formatting, comments, and line/cell insertions. Baselines
+match relative paths and occurrence counts, so additional identical calls are
+new. Renames and call edits can change identity. See [baseline limits and safe
+updates](docs/baselines.md). Git-base comparison (`--changed-from`) is **not
+implemented**; complete supplied files are still analyzed.
 
 ## Analysis boundaries
 
@@ -201,6 +233,8 @@ Start with the [user guides](docs/README.md), [rule catalog](docs/rules/README.m
 and [analysis boundaries](docs/analysis.md). The
 [Python compatibility assessment](docs/development/python-compatibility.md)
 explains why the supported scanner runtime remains Python 3.12+ for now.
+The [follow-up roadmap](docs/development/roadmap.md) separates shipped CI features
+from future analysis, notebook, and validation work.
 
 ## Development and security
 

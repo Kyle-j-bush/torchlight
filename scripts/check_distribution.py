@@ -4,6 +4,7 @@
 """Test each built distribution in a fresh environment, outside the source tree."""
 
 import argparse
+import json
 import os
 import subprocess
 import tempfile
@@ -140,6 +141,59 @@ def check_install(archive: Path, project: dict) -> None:
                     )
                 ):
                     raise SystemExit(f"Installed configuration failed: {result}")
+
+        # Capture debt and report a new finding from the installed archives,
+        # rather than accidentally exercising imports from the checkout.
+        baseline = work / "baseline.json"
+        for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
+            source.write_text("spark.table('events').collect()\n", encoding="utf-8")
+            captured = subprocess.run(
+                [
+                    *entry,
+                    "--select",
+                    "TL001",
+                    "--write-baseline",
+                    str(baseline),
+                    str(source),
+                ],
+                cwd=work,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if captured.returncode != 0 or captured.stderr or not baseline.is_file():
+                raise SystemExit(f"Installed baseline capture failed: {captured}")
+            source.write_text(
+                "spark.table('events').collect()\nspark.table('other').toPandas()\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    *entry,
+                    "--select",
+                    "TL001",
+                    "--baseline",
+                    str(baseline),
+                    "--format",
+                    "sarif",
+                    str(source),
+                ],
+                cwd=work,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 1 or result.stderr:
+                raise SystemExit(f"Installed baseline/SARIF scan failed: {result}")
+            run = json.loads(result.stdout)["runs"][0]
+            if (
+                len(run["results"]) != 1
+                or "toPandas" not in run["results"][0]["message"]["text"]
+                or run["tool"]["driver"]["version"] != project["version"]
+                or not run["invocations"][0]["executionSuccessful"]
+                or not run["results"][0]["partialFingerprints"]
+            ):
+                raise SystemExit(f"Installed SARIF report failed: {result.stdout}")
 
 
 def main() -> None:

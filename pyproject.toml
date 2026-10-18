@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchlight-spark"
-version = "0.2.0"
+version = "0.3.0"
 description = "Review Spark safety risks in Python files and notebooks without execution."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,6 +27,7 @@ classifiers = [
 torchlight = "torchlight.cli:main"
 
 [project.urls]
+Documentation = "https://github.com/Kyle-j-bush/torchlight/blob/main/docs/README.md"
 Repository = "https://github.com/Kyle-j-bush/torchlight"
 Issues = "https://github.com/Kyle-j-bush/torchlight/issues"
 Changelog = "https://github.com/Kyle-j-bush/torchlight/blob/main/CHANGELOG.md"

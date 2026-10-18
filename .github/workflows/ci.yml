@@ -30,6 +30,7 @@ jobs:
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - run: python -m scripts.generate_rule_docs --check
+      - run: python -m scripts.check_sarif
 
   tests:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})

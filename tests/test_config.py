@@ -112,6 +112,9 @@ class ConfigTests(ProjectFiles):
             ),
             ('assume-spark-session = ["for"]', "invalid Python variable name"),
             ('assume-spark-session = [""]', "invalid Python variable name"),
+            ('baseline = ""', "baseline must be a nonempty path string"),
+            ('baseline = ["file.json"]', "baseline must be a nonempty path string"),
+            ("baseline = false", "baseline must be a nonempty path string"),
         ):
             with self.subTest(settings=settings):
                 path = self.configure(settings)
@@ -341,7 +344,7 @@ class ConfigCliTests(ProjectFiles):
     def test_invalid_config_aborts_before_scanning_in_every_output_format(self):
         self.configure('select = ["TL999"]')
         job = self.write("code.py", SOURCE)
-        for output_format in ("text", "json", "github"):
+        for output_format in ("text", "json", "github", "sarif"):
             with (
                 self.subTest(output_format=output_format),
                 patch("torchlight.cli.scan_file") as scan,
@@ -356,6 +359,9 @@ class ConfigCliTests(ProjectFiles):
                     self.assertEqual(len(report["errors"]), 1)
                 elif output_format == "github":
                     self.assertTrue(stdout.startswith("::error "))
+                elif output_format == "sarif":
+                    invocation = json.loads(stdout)["runs"][0]["invocations"][0]
+                    self.assertFalse(invocation["executionSuccessful"])
                 else:
                     self.assertEqual(stdout, "")
         self.assertEqual(self.rule_ids("--no-config", job), (1, ["TL001", "TL002"]))

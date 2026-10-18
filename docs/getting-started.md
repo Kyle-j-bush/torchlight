@@ -4,7 +4,7 @@ Use Python 3.12 or newer. The scanner runtime can be separate from your Spark
 project's environment; Spark itself is not needed to scan source.
 
 ```sh
-python -m pip install torchlight-spark
+python -m pip install --upgrade torchlight-spark
 torchlight jobs/ notebooks/
 ```
 
@@ -12,7 +12,7 @@ The distribution is `torchlight-spark`, while the command and import package are
 `torchlight`. Do not install the unrelated `torchlight` distribution alongside it.
 For isolation, use `pipx install torchlight-spark`.
 
-To try **unreleased configuration support**, install a checkout containing it:
+For local development, install a checkout instead:
 
 ```sh
 python -m pip install .

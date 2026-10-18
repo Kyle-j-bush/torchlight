@@ -1,0 +1,46 @@
+# Copy to .github/workflows/ in a repository using Torchlight v0.3.0+.
+name: Torchlight review
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Torchlight
+        run: python -m pip install torchlight-spark==0.3.0
+      - name: Generate complete SARIF report
+        id: scan
+        shell: bash
+        run: |
+          set +e
+          torchlight --no-baseline --format sarif . > torchlight.sarif
+          status=$?
+          # A finding (1) must not prevent upload; scan errors (2+) still fail.
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+      - name: Upload findings
+        if: ${{ !cancelled() && steps.scan.outcome != 'skipped' }}
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+        with:
+          sarif_file: torchlight.sarif
+          category: torchlight
+      - name: Enforce project policy, including any reviewed baseline
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' }}
+        run: torchlight --format github .
