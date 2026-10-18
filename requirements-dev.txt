@@ -1,2 +1,4 @@
 # Development only; Torchlight has no third-party runtime dependencies.
+build==1.6.1
 ruff==0.17.1
+twine==7.0.0

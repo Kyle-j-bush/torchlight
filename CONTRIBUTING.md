@@ -28,6 +28,20 @@ On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
 
 5. Push your branch and open a pull request against `main`.
 
+For packaging changes, also build and test both distributions:
+
+```sh
+python -m build
+python -m twine check --strict dist/*
+python scripts/check_distribution.py
+```
+
+Start with an empty `dist/` directory so that old versions are not tested or
+published accidentally. The verification script installs each archive in a
+fresh virtual environment and checks metadata and license files, runs the test
+suite against the installed package, and tests both CLI entry points outside
+the source tree.
+
 Do not commit credentials, private data, virtual environments, or notebook
 outputs containing sensitive information. Report security issues privately as
 described in [SECURITY.md](SECURITY.md).
@@ -46,10 +60,45 @@ recorded in [`.github/rulesets/main.json`](.github/rulesets/main.json). Editing
 that file does not automatically change the live settings. Repository owners
 can still edit the settings in GitHub.
 
-GitHub Actions have read-only repository access by default. CodeQL alone has
-permission to upload security results. Actions are pinned to commit SHAs;
+GitHub Actions have read-only repository access by default. CodeQL has permission
+to upload security results; only the publishing job can request a PyPI OIDC
+identity token. Actions are pinned to commit SHAs;
 Dependabot proposes updates to those pins and development dependencies. Updates
 must pass the same checks and are not merged automatically.
+
+## Publishing a release
+
+The PyPI distribution is `torchlight-spark`; its CLI and import package remain
+`torchlight`. Releases use GitHub Trusted Publishing, not stored API tokens.
+
+One-time setup in PyPI's account publishing settings:
+
+- Project: `torchlight-spark`
+- GitHub owner/repository: `Kyle-j-bush/torchlight`
+- Workflow: `publish.yml`
+- Environment: `pypi`
+
+The GitHub `pypi` environment permits only `v*` tags. Version tags cannot be
+changed or deleted; the intended rules are in
+[`.github/rulesets/releases.json`](.github/rulesets/releases.json). The repository
+allows the official PyPA publishing action in addition to GitHub-owned actions,
+and requires full commit-SHA pins for both.
+
+For each release:
+
+1. Update `project.version` in `pyproject.toml` and `CHANGELOG.md` through a PR.
+2. Merge the PR and wait for CI and CodeQL to pass on `main`.
+3. Tag that tested commit as `v<version>` and push the tag.
+4. Publish a GitHub release for that tag. This starts `publish.yml`.
+5. Verify the workflow and installation from PyPI before announcing the release.
+
+The release workflow verifies that the tag matches the package version and is
+on `main`'s history, rebuilds and tests both archives, then passes only those
+artifacts to the isolated publishing job. It publishes provenance attestations
+alongside the package. TestPyPI is not used.
+
+PyPI versions and version tags are immutable: fix a bad release with a new
+version rather than replacing existing files.
 
 ## License
 

@@ -6,6 +6,20 @@
 Find `.collect()` and `.distinct()` calls without running your code. Uses only
 the Python standard library (Python 3.12+).
 
+## Install and run
+
+```sh
+pip install torchlight-spark
+torchlight path/to/file.py path/to/notebook.ipynb path/to/directory
+```
+
+For an isolated CLI installation, use `pipx install torchlight-spark` instead.
+The distribution is named `torchlight-spark`, but the command and Python package
+are named `torchlight`. Do not install it alongside the unrelated `torchlight`
+PyPI distribution in the same environment.
+
+You can also run directly from a checkout:
+
 ```sh
 python main.py path/to/file.py path/to/notebook.ipynb path/to/directory
 # Or: python -m torchlight <paths...>
@@ -38,11 +52,14 @@ python -m unittest discover -s tests
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, linting, and the pull request
 workflow. CI tests Python 3.12–3.14 on Linux and Python 3.12 on macOS and Windows.
+It also builds and tests both the wheel and source distribution in clean environments.
 The `main` branch requires passing CI and CodeQL checks through pull requests;
 direct pushes and protection bypasses are disabled.
 
 See [SECURITY.md](SECURITY.md) for safe-use guidance and private vulnerability
 reporting. Never share credentials or private notebooks in issues.
+
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

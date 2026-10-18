@@ -1,7 +1,7 @@
 # Security policy
 
-Security fixes are currently provided on `main`; there are no released versions.
-Use the latest commit.
+Security fixes are provided on `main` and published in new releases. Use the
+latest published version. Older releases do not receive backported fixes.
 
 ## Reporting a vulnerability
 
