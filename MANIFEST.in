@@ -1,3 +1,5 @@
 include main.py CHANGELOG.md CONTRIBUTING.md SECURITY.md NOTICE requirements-dev.txt
+include .pre-commit-hooks.yaml
 recursive-include tests *.py
 recursive-include scripts *.py
+recursive-include benchmarks *.json *.md

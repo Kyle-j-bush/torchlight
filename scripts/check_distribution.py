@@ -3,6 +3,7 @@
 
 """Test each built distribution in a fresh environment, outside the source tree."""
 
+import argparse
 import os
 import subprocess
 import tempfile
@@ -78,7 +79,12 @@ def check_install(archive: Path, project: dict) -> None:
         )
 
         source = work / "example.py"
-        source.write_text("df.collect()\n", encoding="utf-8")
+        source.write_text(
+            "from pyspark.sql import SparkSession\n"
+            "spark = SparkSession.builder.getOrCreate()\n"
+            "spark.table('events').collect()\n",
+            encoding="utf-8",
+        )
         for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
             subprocess.run(
                 [*entry, "--help"], cwd=work, check=True, capture_output=True
@@ -90,23 +96,33 @@ def check_install(archive: Path, project: dict) -> None:
                 text=True,
                 check=False,
             )
-            if (result.returncode, result.stdout, result.stderr) != (
-                1,
-                f"{source}:1: spark method .collect()\n",
-                "",
+            if (
+                result.returncode != 1
+                or not result.stdout.startswith(f"{source}:3: TL001:")
+                or "Evidence:" not in result.stdout
+                or "Review:" not in result.stdout
+                or result.stderr
             ):
                 raise SystemExit(f"Installed CLI failed: {result}")
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dist-dir",
+        type=Path,
+        default=ROOT / "dist",
+        help="Directory containing exactly one wheel and one source archive.",
+    )
+    args = parser.parse_args()
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]
     for pattern in ("*.whl", "*.tar.gz"):
-        archives = list((ROOT / "dist").glob(pattern))
+        archives = list(args.dist_dir.glob(pattern))
         if len(archives) != 1:
             raise SystemExit(
-                f"Expected exactly one {pattern} in dist/, found {len(archives)}"
+                f"Expected exactly one {pattern} in {args.dist_dir}, found {len(archives)}"
             )
         check_install(archives[0], project)
 

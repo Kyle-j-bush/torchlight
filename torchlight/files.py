@@ -6,8 +6,10 @@
 import os
 from pathlib import Path
 
-from torchlight.analysis import find_spark_calls, format_syntax_error, parse_source
+from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
+from torchlight.diagnostics import Finding
 from torchlight.notebooks import scan_notebook
+from torchlight.suppressions import apply_suppressions
 
 SOURCE_SUFFIXES = {".py", ".ipynb"}
 
@@ -33,22 +35,24 @@ def iter_source_files(root: Path):
                 yield path
 
 
-def scan_python(path: Path) -> tuple[list[str], list[str]]:
+def scan_python(
+    path: Path, *, assume_sessions: tuple[str, ...] = ()
+) -> tuple[list[Finding], list[str]]:
     """Return (findings, errors) for a Python file."""
     try:
-        tree = parse_source(path.read_text(encoding="utf-8-sig"), str(path))
+        source = path.read_text(encoding="utf-8-sig")
+        tree = parse_source(source, str(path))
     except (OSError, SyntaxError, ValueError) as exc:
         return [], [f"{path}: {format_syntax_error(exc)}"]
 
-    findings = [
-        f"{path}:{lineno}: spark method .{method}()"
-        for method, lineno in find_spark_calls(tree)
-    ]
-    return findings, []
+    analyzer = SparkAnalyzer(str(path), assume_sessions)
+    return apply_suppressions(source, analyzer.analyze(tree, source), str(path))
 
 
-def scan_file(path: Path) -> tuple[list[str], list[str]]:
+def scan_file(
+    path: Path, *, assume_sessions: tuple[str, ...] = ()
+) -> tuple[list[Finding], list[str]]:
     """Scan one source file, dispatching on its suffix."""
     if path.suffix == ".ipynb":
-        return scan_notebook(path)
-    return scan_python(path)
+        return scan_notebook(path, assume_sessions=assume_sessions)
+    return scan_python(path, assume_sessions=assume_sessions)
