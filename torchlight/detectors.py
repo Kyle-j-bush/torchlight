@@ -48,7 +48,11 @@ class CoalescedWrite:
 
     def check(self, facts: CallFacts) -> Iterable[Diagnostic]:
         value = facts.receiver
-        if facts.terminal_write and value.single_partition is not None:
+        if (
+            facts.terminal_write
+            and value.single_partition is not None
+            and value.single_partition_method == "coalesce"
+        ):
             yield Diagnostic(
                 self.rule_id,
                 (
@@ -78,8 +82,29 @@ class LoopCarriedProjection:
             )
 
 
+class RepartitionedWrite:
+    rule_id = "TL004"
+
+    def check(self, facts: CallFacts) -> Iterable[Diagnostic]:
+        value = facts.receiver
+        if (
+            facts.terminal_write
+            and value.single_partition is not None
+            and value.single_partition_method == "repartition"
+        ):
+            yield Diagnostic(
+                self.rule_id,
+                (
+                    value.origin,
+                    f"repartition(1) at {value.single_partition.describe()} feeds this write; "
+                    "no operation recognized that restores multiple output partitions.",
+                ),
+            )
+
+
 DETECTORS: tuple[Detector, ...] = (
     UnboundedMaterialization(),
     CoalescedWrite(),
     LoopCarriedProjection(),
+    RepartitionedWrite(),
 )

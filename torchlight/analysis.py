@@ -524,6 +524,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         if name not in FRAME_METHODS:
             return None
         bound, single = value.row_limit, value.single_partition
+        partition_method = value.single_partition_method
         if name in EXPANDING_METHODS or self._has_generator(node):
             bound = None
         if name == "sample":
@@ -544,10 +545,20 @@ class SparkAnalyzer(ast.NodeVisitor):
                 or integer_argument(node, "numPartitions") != 1
             ):
                 single = None
+        if name == "repartition" and integer_argument(node, "numPartitions") == 1:
+            if single is None:
+                single = self._location(node)
+                partition_method = "repartition"
         if name == "coalesce":
             if integer_argument(node, "numPartitions") == 1:
                 single = self._location(node)
-        return replace(value, row_limit=bound, single_partition=single)
+                partition_method = "coalesce"
+        return replace(
+            value,
+            row_limit=bound,
+            single_partition=single,
+            single_partition_method=partition_method,
+        )
 
     def _has_generator(self, node: ast.Call) -> bool:
         for argument in [*node.args, *(kw.value for kw in node.keywords)]:
@@ -637,6 +648,7 @@ class SparkAnalyzer(ast.NodeVisitor):
             row_limit=bound,
             single_partition=left.single_partition
             if left.single_partition == right.single_partition
+            and left.single_partition_method == right.single_partition_method
             else None,
             loop_origins=left.loop_origins & right.loop_origins,
         )

@@ -16,6 +16,7 @@ class Value:
     single_partition: Location | None = None
     # Identity on entry to a possibly repeated loop. Fresh reads drop it.
     loop_origins: frozenset[tuple[int, str]] = frozenset()
+    single_partition_method: str = "coalesce"
 
 
 @dataclass(frozen=True)

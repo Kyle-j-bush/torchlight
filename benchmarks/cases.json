@@ -181,6 +181,43 @@
       "description": "Sampling without replacement cannot increase the known row count.",
       "source": ["from pyspark.sql import SparkSession", "events = SparkSession.builder.getOrCreate().table('events')", "events.limit(10).sample(withReplacement=False, fraction=0.5).collect()"],
       "expected": []
+    },
+    {
+      "name": "repartition-single-output",
+      "description": "An explicit single partition reaches a terminal write through an alias.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    small = events.repartition(numPartitions=1)", "    small.write.mode('overwrite').parquet(output)"],
+      "expected": [["TL004", 4, null]]
+    },
+    {
+      "name": "repartition-no-terminal",
+      "description": "A single-partition transformation alone is not the targeted write pattern.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    events.repartition(1).write.mode('overwrite')"],
+      "expected": []
+    },
+    {
+      "name": "repartition-restored-parallelism",
+      "description": "A subsequent repartition removes single-partition evidence.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    events.repartition(1).repartition(8).write.parquet(output)"],
+      "expected": []
+    },
+    {
+      "name": "repartition-unknown-receiver",
+      "description": "A method name does not prove the receiver is Spark.",
+      "source": ["events.repartition(1).write.parquet(output)"],
+      "expected": []
+    },
+    {
+      "name": "repartition-notebook-write",
+      "description": "Single-partition provenance survives across notebook code cells.",
+      "assume_sessions": ["spark"],
+      "cells": [["export = spark.table('events').repartition(1)"], ["export.writeTo('out').createOrReplace()"]],
+      "expected": [["TL004", 1, 2]]
+    },
+    {
+      "name": "repartition-intentional-export",
+      "description": "A reviewed small export can be suppressed with a specific reason.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    events.repartition(1).write.csv(output) # torchlight: ignore[TL004] -- small export required"],
+      "expected": []
     }
   ]
 }

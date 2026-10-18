@@ -41,6 +41,16 @@ RULES = {
         "Consider constructing the expressions together with select() or withColumns(). "
         "Preserve dependencies between columns; this is not a safe automatic rewrite.",
     ),
+    "TL004": Rule(
+        "TL004",
+        "Potential single-partition write bottleneck from repartition(1)",
+        "repartition(1) shuffles the result into one partition before the write, "
+        "limiting write parallelism. This can be intentional for small exports; "
+        "it does not guarantee exactly one output file.",
+        "Review whether one output partition is required. For large outputs, keep "
+        "suitable parallelism; do not automatically replace repartition with coalesce, "
+        "which has different execution behavior.",
+    ),
 }
 
 
