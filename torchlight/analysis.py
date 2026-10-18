@@ -4,9 +4,11 @@
 """Conservative, local Spark DataFrame analysis without importing or executing Spark."""
 
 import ast
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
+from torchlight.detectors import DETECTORS
 from torchlight.diagnostics import RULES, Finding, Location
+from torchlight.facts import CallFacts, Value
 from torchlight.identity import call_key
 
 PARSE_FLAGS = ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
@@ -128,17 +130,6 @@ GENERATORS = {
     "inline",
     "inline_outer",
 }
-
-
-@dataclass(frozen=True)
-class Value:
-    kind: str
-    origin: str
-    row_limit: int | None = None
-    single_partition: Location | None = None
-    # A token identifies the DataFrame's value on entry to a possibly repeated
-    # loop. A new read/reset drops it; row-preserving transformations retain it.
-    loop_origins: frozenset[tuple[int, str]] = frozenset()
 
 
 class Bindings(ast.NodeVisitor):
@@ -456,6 +447,22 @@ class SparkAnalyzer(ast.NodeVisitor):
         return None
 
     def _method(self, value: Value, name: str, node: ast.Call) -> Value | None:
+        facts = CallFacts(
+            receiver=value,
+            method=name,
+            terminal_write=(value.kind == "writer" and name in WRITE_METHODS)
+            or (value.kind == "writer_v2" and name in V2_WRITE_METHODS),
+            carries_loop_frame=any(
+                (loop, target) in value.loop_origins
+                for loop in self.loop_ids
+                for target in self.assignment_targets
+            ),
+        )
+        for detector in DETECTORS:
+            for diagnostic in detector.check(facts):
+                self._emit(
+                    diagnostic.rule_id, node, diagnostic.evidence, diagnostic.detail
+                )
         if value.kind == "builder":
             if name in {"getOrCreate", "create"}:
                 return Value("session", self._origin(node, "SparkSession builder"))
@@ -479,13 +486,9 @@ class SparkAnalyzer(ast.NodeVisitor):
             if name in {"format", "option", "options", "schema"}:
                 return value
         if value.kind == "writer":
-            if name in WRITE_METHODS:
-                self._check_write(value, node)
             if name in WRITE_OPTIONS:
                 return value
         if value.kind == "writer_v2":
-            if name in V2_WRITE_METHODS:
-                self._check_write(value, node)
             if name in {
                 "using",
                 "option",
@@ -511,13 +514,6 @@ class SparkAnalyzer(ast.NodeVisitor):
         if value.kind != "frame":
             return None
         if name in {"collect", "toPandas"}:
-            if value.row_limit is None:
-                self._emit(
-                    "TL001",
-                    node,
-                    (value.origin, "No explicit row limit recognized."),
-                    f" from .{name}()",
-                )
             return None
         if name == "writeTo":
             return replace(value, kind="writer_v2")
@@ -527,20 +523,6 @@ class SparkAnalyzer(ast.NodeVisitor):
             return replace(value, row_limit=1, single_partition=None)
         if name not in FRAME_METHODS:
             return None
-        if name == "withColumn" and any(
-            (loop, target) in value.loop_origins
-            for loop in self.loop_ids
-            for target in self.assignment_targets
-        ):
-            self._emit(
-                "TL003",
-                node,
-                (
-                    value.origin,
-                    "The assignment carries this DataFrame forward through a potentially "
-                    "repeated loop; it is not reset to a fresh DataFrame first.",
-                ),
-            )
         bound, single = value.row_limit, value.single_partition
         if name in EXPANDING_METHODS or self._has_generator(node):
             bound = None
@@ -582,18 +564,6 @@ class SparkAnalyzer(ast.NodeVisitor):
                     ):
                         return True
         return False
-
-    def _check_write(self, value: Value, node: ast.Call) -> None:
-        if value.single_partition is not None:
-            self._emit(
-                "TL002",
-                node,
-                (
-                    value.origin,
-                    f"coalesce(1) at {value.single_partition.describe()} feeds this write; "
-                    "no operation recognized that restores multiple output partitions.",
-                ),
-            )
 
     def visit_Assign(self, node):
         previous = self.assignment_targets
