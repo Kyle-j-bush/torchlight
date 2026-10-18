@@ -19,8 +19,8 @@ On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
 4. Run the same checks as CI:
 
    ```sh
-   python -m ruff check .
-   python -m ruff format --check .
+     python -m ruff check .
+     python -m ruff format --check .
     python -m unittest discover -s tests -v
     python -m scripts.check_benchmark
      python -m scripts.generate_rule_docs --check

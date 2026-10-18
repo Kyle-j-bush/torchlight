@@ -9,6 +9,8 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Getting started](getting-started.md): installation and a first finding.
 - [Configuration](configuration.md): shared project policy and exact precedence.
 - [CI and pre-commit](integrations.md): use the same policy locally and in CI.
+- [Baselines](baselines.md): adopt with reviewed existing debt, fail only on new findings.
+- [Report identity and SARIF](reporting.md): stable fingerprints and Code Scanning.
 - [Rule catalog](rules/README.md): examples, required evidence, and review guidance.
 - [Analysis boundaries and notebook behavior](analysis.md): what the scanner can
   and cannot establish.
@@ -16,12 +18,12 @@ the files it scans. Its core has no third-party runtime dependencies.
 ## Project and validation
 
 - [Python compatibility assessment](development/python-compatibility.md).
+- [Follow-up roadmap](development/roadmap.md).
 - [Real-world benchmark protocol](../benchmarks/real-world-protocol.md).
 - [Synthetic regression corpus](../benchmarks/README.md).
 - [Contributing](../CONTRIBUTING.md) and [security](../SECURITY.md).
 
-Configuration in these docs is **unreleased**: use a checkout containing this
-change, not the v0.2.0 PyPI release. Stable Python APIs, SARIF, baselines,
-Spark-version targeting, and editor integrations remain future work. There is no
-hosted documentation site yet; these Markdown guides are the initial information
-architecture.
+These guides describe v0.3.0. Stable Python APIs, Spark-version targeting, Git-base
+comparison, and editor integrations remain future work. There is no hosted
+documentation site yet; these Markdown guides are the initial information
+architecture. The real-world protocol is not a claim of measured accuracy.

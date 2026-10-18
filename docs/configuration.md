@@ -1,6 +1,6 @@
-# Project configuration (unreleased)
+# Project configuration
 
-Install a checkout containing this feature; v0.2.0 does not read configuration.
+Available in v0.3.0+. Older releases do not read project configuration.
 
 ```toml
 [tool.torchlight]
