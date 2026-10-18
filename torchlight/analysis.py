@@ -7,6 +7,7 @@ import ast
 from dataclasses import dataclass, replace
 
 from torchlight.diagnostics import RULES, Finding, Location
+from torchlight.identity import call_key
 
 PARSE_FLAGS = ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
 
@@ -240,6 +241,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         self.next_loop_id = 0
         self.assignment_targets: set[str] = set()
         self.class_globals: dict[str, Value] | None = None
+        self.parents: dict[ast.AST, ast.AST] = {}
 
     def analyze(
         self, tree: ast.Module, source: str, cell: int | None = None
@@ -247,6 +249,11 @@ class SparkAnalyzer(ast.NodeVisitor):
         self.source, self.cell = source, cell
         self.lines = source.splitlines()
         self.findings = []
+        self.parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
         self._block(tree.body)
         unique = {(f.rule_id, f.location): f for f in self.findings}
         return sorted(
@@ -278,6 +285,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 message,
                 evidence,
                 self.lines[node.lineno - 1].strip(),
+                structural_key=call_key(node, self.parents),
             )
         )
 

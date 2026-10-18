@@ -12,9 +12,11 @@
 - User guides, a generated rule catalog checked in CI, and curated rule examples.
 - An initial Python-compatibility assessment and a permissioned, independently
   labeled real-world benchmark protocol (not a new accuracy claim).
+- Versioned structural finding fingerprints, stable across formatting and
+  line/cell insertions, exposed as an additive JSON schema version 1 field.
 
-No runtime dependencies or new rules. Python 3.12+ remains required; JSON findings
-and existing scan exit semantics are unchanged.
+No runtime dependencies or new rules. Python 3.12+ remains required; existing scan
+exit semantics are unchanged. JSON schema version 1 gains only an additive field.
 
 ## 0.2.0 — 2026-10-18
 

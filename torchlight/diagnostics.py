@@ -3,7 +3,9 @@
 
 """Stable rule identities and structured, evidence-based findings."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+
+from torchlight.identity import fingerprint
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,11 @@ class Finding:
     message: str
     evidence: tuple[str, ...]
     snippet: str
+    structural_key: str = field(default="", repr=False, compare=False)
+
+    @property
+    def fingerprint(self) -> str:
+        return fingerprint(self.rule_id, self.structural_key or self.snippet)
 
     @property
     def rule(self) -> Rule:
@@ -72,6 +79,7 @@ class Finding:
             "path": self.path,
             "rule_id": self.rule_id,
             "severity": "warning",
+            "fingerprint": self.fingerprint,
             **asdict(self.location),
             "end_line": self.end_line,
             "message": self.message,
