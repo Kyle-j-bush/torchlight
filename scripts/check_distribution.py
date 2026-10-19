@@ -44,6 +44,17 @@ assert json.loads(report.render('json')) == report.to_dict()
 assert report.to_dict()['schema_version'] == 1
 assert report.findings[0].fingerprint.startswith('v1:')
 """
+COMPARISON_API_CHECK = """
+from pathlib import Path
+from torchlight import Config, Scanner
+
+report = Scanner(Config(root=Path.cwd(), assume_sessions=('spark',))).scan(
+    'job.py', changed_from='HEAD'
+)
+assert report.exit_code == 1 and not report.errors
+assert len(report.findings) == 1
+assert 'toPandas' in report.findings[0].message
+"""
 
 
 def check_install(archive: Path, project: dict) -> None:
@@ -216,6 +227,62 @@ def check_install(archive: Path, project: dict) -> None:
                 or not run["results"][0]["partialFingerprints"]
             ):
                 raise SystemExit(f"Installed SARIF report failed: {result.stdout}")
+
+        repository = work / "comparison"
+        repository.mkdir()
+        source = repository / "job.py"
+        source.write_text("spark.table('events').collect()\n", encoding="utf-8")
+        for arguments in (
+            ["init", "--template=", "-b", "main"],
+            ["config", "user.name", "Torchlight Packaging"],
+            ["config", "user.email", "tests@example.invalid"],
+            ["add", "job.py"],
+            ["commit", "-m", "base snapshot"],
+        ):
+            subprocess.run(
+                ["git", "-c", "commit.gpgsign=false", *arguments],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+            )
+        source.write_text(
+            "spark.table('events').collect()\nspark.table('other').toPandas()\n",
+            encoding="utf-8",
+        )
+        subprocess.run(
+            [str(python), "-I", "-c", COMPARISON_API_CHECK],
+            cwd=repository,
+            check=True,
+        )
+        for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
+            result = subprocess.run(
+                [
+                    *entry,
+                    "--no-config",
+                    "--assume-spark-session",
+                    "spark",
+                    "--changed-from",
+                    "HEAD",
+                    "--format",
+                    "json",
+                    "job.py",
+                ],
+                cwd=repository,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 1 or result.stderr:
+                raise SystemExit(f"Installed Git comparison failed: {result}")
+            document = json.loads(result.stdout)
+            if (
+                document["errors"]
+                or len(document["findings"]) != 1
+                or "toPandas" not in document["findings"][0]["message"]
+            ):
+                raise SystemExit(
+                    f"Installed Git comparison report failed: {result.stdout}"
+                )
 
 
 def main() -> None:

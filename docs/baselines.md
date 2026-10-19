@@ -60,5 +60,7 @@ backslashes or colons cannot be captured. Invalid schemas, rules, counts, paths,
 or unsupported fingerprints abort before scanning, rather than silently hiding
 findings. Use the same project root and policy in all environments.
 
-This release still scans complete supplied files. It does **not** implement
-`--changed-from`, Git-base comparison, rename tracking, or cross-file analysis.
+Baselines remain path-based; they do not track renames or analyze cross-file flow.
+For PR review without a saved snapshot, v0.5.0+ provides separate
+[Git-base comparison](git-comparison.md). It ignores configured baselines and
+cannot be combined with `--baseline`, `--write-baseline`, or `--no-baseline`.

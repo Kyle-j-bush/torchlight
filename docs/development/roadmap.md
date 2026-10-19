@@ -5,6 +5,9 @@ The October 2026 research report is a direction, not a claim that its full
 adds an internal detector boundary, one narrowly evidenced rule, and an initial
 public Python API without weakening conservative Spark identity analysis.
 
+v0.5.0 adds Git-base comparison for review; the remaining analysis, notebook,
+integration, and independent validation work below is still open.
+
 ## Shipped in v0.3.0
 
 - Shared `pyproject.toml` policy, deterministic discovery, excludes, and CLI overrides.
@@ -24,6 +27,14 @@ public Python API without weakening conservative Spark identity analysis.
 - Contributor/API docs and installed wheel/sdist API verification. Detector
   internals remain private and Python interfaces remain pre-1.0.
 
+## Shipped in v0.5.0
+
+- Git merge-base comparison through the shared CLI/API, with complete changed-file
+  and notebook analysis, local/untracked changes, rename and duplicate matching.
+- Explicit history/source/error boundaries, read-only Git access with execution
+  helpers disabled, baseline isolation, and installed comparison verification.
+- A PR policy-enforcement example retaining complete SARIF uploads separately.
+
 ## Next: analysis and review contracts
 
 1. Evaluate Spark-version targeting against documented API differences before
@@ -33,8 +44,6 @@ public Python API without weakening conservative Spark identity analysis.
    compatibility and avoid exposing analyzer state.
 3. Evaluate severity and confidence policy without presenting unmeasured precision
    as fact. Keep existing warnings and no semantics-changing automatic fixes.
-4. Add Git-base comparison only with explicit rename, shallow-clone, deleted-file,
-   notebook, and error behavior. Baselines alone are not diff analysis.
 
 ## Notebook and integration work
 
@@ -61,4 +70,4 @@ public Python API without weakening conservative Spark identity analysis.
 A 1.0 decision should be gated on stable interfaces, reproducible real-world
 quality evidence, and dependable CI ergonomics—not a target rule count. The
 synthetic corpus is regression coverage, not production accuracy. No external
-review, benchmark, performance, or broad-roadmap completion is implied by v0.4.0.
+review, benchmark, performance, or broad-roadmap completion is implied by v0.5.0.

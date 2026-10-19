@@ -96,3 +96,7 @@ recursive discovery and cannot be re-enabled by configuration.
 Without a baseline, scan exit semantics are unchanged. Baselines filter existing
 findings before reporting and deciding the exit code; snapshot writing has its
 own documented success/error contract. No runtime dependencies are added.
+
+`--changed-from REF` (v0.5.0+) is an invocation option, not a TOML setting. It
+uses this same current policy on both snapshots but ignores the configured
+baseline. See [Git comparison](git-comparison.md) for repository boundaries.

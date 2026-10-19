@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.5.0 — 2026-10-18
+
+### Added
+
+- `--changed-from REF` and `Scanner.scan(..., changed_from=REF)` report findings
+  introduced since the unique merge base of REF and HEAD. Complete changed Python
+  files/notebooks are analyzed, including committed, staged, unstaged, and
+  non-ignored untracked source. Deleted files are skipped.
+- Duplicate-aware structural matching across Git-detected renames, formatting,
+  and notebook cell insertions. Moving source out of an excluded path or changing
+  a non-source file into source is treated as newly reviewed code.
+- Read-only historical blob analysis without checkout, source execution, or
+  enabled Git clean/process, external diff/textconv, or fsmonitor helpers.
+- Explicit errors for shallow/missing/ambiguous history, unresolved conflicts,
+  unavailable blobs, and skip-worktree/assume-unchanged index entries. Changed
+  source errors in either snapshot are never treated as a clean comparison.
+- Git comparison guide, PR enforcement example retaining full SARIF uploads,
+  temporary-repository regressions, and installed-distribution comparison checks.
+
+Comparison mode ignores configured baselines and is mutually exclusive with all
+three baseline CLI flags. Ordinary scans, rule output, JSON/baseline/fingerprint
+schemas, exit codes, and public exports are unchanged. Git is required only for
+comparison; no Python runtime dependency is added. Stage file moves for rename
+detection; unstaged moves to untracked names are additions. Symlink inputs are
+rejected, nested repositories/submodules are not traversed by comparison, and
+identical findings only detect net count increases—not individual replacements.
+No additional rules, Spark-version targeting, or production accuracy claims.
+
 ## 0.4.0 — 2026-10-18
 
 ### Added

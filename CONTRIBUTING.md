@@ -10,6 +10,7 @@ python -m pip install -r requirements-dev.txt
 ```
 
 On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell instead.
+Git comparison tests and distribution verification also require Git 2.45+.
 
 ## Making changes
 

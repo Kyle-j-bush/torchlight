@@ -103,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ignore the configured baseline and report all enabled findings.",
     )
+    baseline_group.add_argument(
+        "--changed-from",
+        type=git_revision,
+        metavar="REF",
+        help="Report findings introduced since the merge base of REF and HEAD; ignores saved baselines.",
+    )
     return parser
 
 
@@ -111,6 +117,12 @@ def rule_codes(value: str) -> set[str]:
     if not codes <= RULES.keys():
         raise argparse.ArgumentTypeError(f"expected rule IDs from {','.join(RULES)}")
     return codes
+
+
+def git_revision(value: str) -> str:
+    if not value.strip() or "\x00" in value:
+        raise argparse.ArgumentTypeError("expected a nonempty Git revision")
+    return value
 
 
 def session_name(value: str) -> str:
@@ -172,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         report_error(message)
         return 2
 
-    report = Scanner(config=config).scan(args.paths)
+    report = Scanner(config=config).scan(args.paths, changed_from=args.changed_from)
     findings, errors = list(report.findings), list(report.errors)
     if args.write_baseline is not None and not errors:
         try:

@@ -49,9 +49,18 @@ def scan_notebook(
 ) -> tuple[list[Finding], list[str]]:
     """Return (findings, errors), numbering code cells and their lines from 1."""
     try:
-        notebook = json.loads(path.read_text(encoding="utf-8-sig"))
+        source = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError) as exc:
         return [], [f"{path}: {exc}"]
+    return scan_notebook_source(path, source, assume_sessions=assume_sessions)
+
+
+def scan_notebook_source(
+    path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
+) -> tuple[list[Finding], list[str]]:
+    """Analyze notebook JSON in memory using the same cell boundaries as files."""
+    try:
+        notebook = json.loads(source)
     except json.JSONDecodeError as exc:
         return [], [f"{path}: invalid notebook JSON: {exc}"]
 
