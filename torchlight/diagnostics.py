@@ -87,6 +87,9 @@ class Finding:
     evidence: tuple[str, ...]
     snippet: str
     structural_key: str = field(default="", repr=False, compare=False)
+    custom_rule: Rule | None = field(
+        default=None, repr=False, compare=False, kw_only=True
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "evidence", tuple(self.evidence))
@@ -97,7 +100,7 @@ class Finding:
 
     @property
     def rule(self) -> Rule:
-        return RULES[self.rule_id]
+        return self.custom_rule if self.custom_rule is not None else RULES[self.rule_id]
 
     def to_dict(self) -> dict:
         return {

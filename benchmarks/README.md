@@ -30,3 +30,8 @@ The [draft real-world protocol](real-world-protocol.md) defines permission recor
 frozen project-level splits, independent source audits, adjudication, per-rule
 precision/recall and reviewer burden, plus performance reporting. It is a plan,
 not a collected dataset or a claim of measured accuracy.
+
+The [local pilot tools](local-validation.md) freeze permissioned source and blank
+labels before evaluation. No real-world results have been collected yet.
+The separate [timing harness](performance.md) measures a deterministic synthetic
+workload; it does not benchmark production accuracy or Spark runtime savings.

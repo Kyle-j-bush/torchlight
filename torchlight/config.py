@@ -11,6 +11,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 
 from torchlight.diagnostics import RULES
+from torchlight.plugins import Plugin
 
 CONFIG_KEYS = {"select", "ignore", "exclude", "assume-spark-session", "baseline"}
 
@@ -68,14 +69,25 @@ def _matches(
 class Config:
     """Immutable scan policy. Relative baseline paths are anchored to ``root``."""
 
-    select: frozenset[str] = frozenset(RULES)
+    select: frozenset[str] | None = None
     ignore: frozenset[str] = frozenset()
     exclude: tuple[str, ...] = ()
     assume_sessions: tuple[str, ...] = ()
     root: Path = field(default_factory=Path.cwd)
     baseline: Path | None = None
+    plugins: tuple[Plugin, ...] = ()
 
     def __post_init__(self) -> None:
+        if not isinstance(self.plugins, (list, tuple)) or any(
+            not isinstance(plugin, Plugin) for plugin in self.plugins
+        ):
+            raise ConfigError("plugins must be a list or tuple of Plugin objects")
+        object.__setattr__(self, "plugins", tuple(self.plugins))
+        codes = [plugin.rule.code for plugin in self.plugins]
+        if len(codes) != len(set(codes)) or set(codes) & RULES.keys():
+            raise ConfigError("duplicate or built-in plugin rule ID")
+        if self.select is None:
+            object.__setattr__(self, "select", frozenset(self.rules))
         # Snapshot caller-owned collections so a frozen Config is deeply immutable.
         for name in ("select", "ignore", "exclude", "assume_sessions"):
             value = getattr(self, name)
@@ -88,7 +100,7 @@ class Config:
             )
             object.__setattr__(self, name, normalized)
         for name in ("select", "ignore"):
-            unknown = getattr(self, name) - RULES.keys()
+            unknown = getattr(self, name) - self.rules.keys()
             if unknown:
                 raise ConfigError(
                     f"{name}: unknown rule ID(s): {', '.join(sorted(unknown))}"
@@ -117,6 +129,11 @@ class Config:
     def from_pyproject(cls, path: str | Path) -> "Config":
         """Load an explicit TOML policy; missing/invalid tables raise ConfigError."""
         return read_config(Path(path), explicit=True)
+
+    @property
+    def rules(self) -> dict:
+        """Detached built-in and explicitly registered plugin metadata."""
+        return {**RULES, **{plugin.rule.code: plugin.rule for plugin in self.plugins}}
 
     @property
     def enabled_rules(self) -> frozenset[str]:

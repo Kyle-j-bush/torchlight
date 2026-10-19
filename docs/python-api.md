@@ -29,6 +29,10 @@ exclude=("generated/**",), assume_sessions=("spark",), root=Path("project"))`.
 `ignore` defaults to empty and `select` defaults to every current rule. Collections
 are validated and copied to frozen sets/tuples; changing an input list cannot
 change an existing policy. A relative `baseline` path is anchored to `root`.
+Since v0.7.0, optional `plugins` registers trusted `Plugin` objects in-process;
+omitted/None `select` is normalized to all registered rules. Explicit selections
+still replace defaults. `config.rules` returns a detached rule catalog.
+See [extension API version 1 and trust boundaries](plugins.md); TOML cannot load plugins.
 
 `Scanner()` uses built-in policy and the construction-time working directory as
 its root. **It does not discover configuration.** This avoids silently changing
@@ -47,6 +51,7 @@ The CLI retains its documented working-directory discovery.
   baselines have the same behavior as the CLI.
 - Each call has fresh analysis state. A scanner can be reused; files do not share
   Spark state. Notebook cells within one file still share document-order state.
+  Explicit plugin objects are reused and must be deterministic/stateless themselves.
 - Since v0.6.0, Databricks-header `.py` files carry exported cell numbers with
   physical file coordinates. `.ipynb` coordinates remain relative to code cells.
   Do not assume every non-null `location.cell` implies a cell-relative line.
@@ -85,7 +90,11 @@ or new severity policy is introduced.
 
 This is the initial, **pre-1.0** Python API. Incompatible changes require release
 notes and a minor-version change, not a patch. Rule IDs, JSON schema, and
-fingerprint/baseline versions retain their existing contracts. Modules containing
-AST traversal, semantic facts, detector registration, and mutable analyzer state
-are internal; they are not a supported plugin API. No `py.typed` support promise
-is made yet. [Detector contributor guide](development/detectors.md).
+fingerprint/baseline versions retain their existing contracts. AST traversal and
+mutable analyzer state remain internal; implementation module paths are not
+extension contracts. No `py.typed` support promise is made yet. The supported
+extension imports in v0.7.0 are
+`torchlight.plugins.{API_VERSION, Plugin, PluginError, Detector, Diagnostic, CallFacts, Value}`.
+The [versioned plugin contract](plugins.md) exposes facts, not AST/state access.
+Breaking that contract requires another plugin API version.
+[Detector contributor guide](development/detectors.md).

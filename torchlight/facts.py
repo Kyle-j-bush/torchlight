@@ -1,7 +1,7 @@
 # Copyright 2026 Kyle Bush
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal immutable Spark facts; no detector performs receiver inference."""
+"""Immutable Spark facts, exported through version 1 of torchlight.plugins."""
 
 from dataclasses import dataclass
 

@@ -20,7 +20,7 @@ class BaselineError(ValueError):
     """A baseline must not hide findings when it cannot be safely interpreted."""
 
 
-def read_baseline(path: Path) -> Counter[Key]:
+def read_baseline(path: Path, *, rules=RULES) -> Counter[Key]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
         if (
@@ -59,7 +59,7 @@ def read_baseline(path: Path) -> Counter[Key]:
                 raise BaselineError(
                     "finding paths must be normalized project-relative paths"
                 )
-            if not isinstance(rule, str) or rule not in RULES:
+            if not isinstance(rule, str) or rule not in rules:
                 raise BaselineError("unknown rule ID in baseline")
             if not isinstance(identity, str) or not re.fullmatch(
                 r"v1:[0-9a-f]{64}", identity
@@ -99,19 +99,25 @@ def new_findings(
     return result
 
 
-def validate_destination(path: Path) -> None:
+def validate_destination(path: Path, *, rules=RULES) -> None:
     # Explicit updates may replace a valid baseline, never an unrelated file or
     # a symlink. Parent directories are not created implicitly.
     if path.is_symlink():
         raise BaselineError(f"{path}: refusing to replace a symlink")
     if path.exists():
-        read_baseline(path)
+        read_baseline(path, rules=rules)
 
 
-def write_baseline(path: Path, findings: list[Finding], root: Path) -> None:
-    validate_destination(path)
+def write_baseline(
+    path: Path, findings: list[Finding], root: Path, *, rules=RULES
+) -> None:
+    validate_destination(path, rules=rules)
     counts: Counter[Key] = Counter()
     for finding in findings:
+        if finding.rule_id not in rules:
+            raise BaselineError(
+                "unknown rule ID in baseline; supply the registered rules"
+            )
         key = _key(finding, root)
         if key is None:
             raise BaselineError(

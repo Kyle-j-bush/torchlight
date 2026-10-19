@@ -9,6 +9,8 @@ v0.5.0 adds Git-base comparison for review; the remaining analysis, notebook,
 integration, and independent validation work below is still open.
 v0.6.0 adds one further narrow rule, Databricks Python exports, and a documented
 Spark-version assessment—not a target-version configuration surface.
+v0.7.0 adds explicit detector plugins, synthetic scan timing, and private local
+validation tools. The permissioned-corpus evaluation itself is still blocked on data.
 
 ## Shipped in v0.3.0
 
@@ -46,13 +48,23 @@ Spark-version assessment—not a target-version configuration surface.
 - [Spark 3.3–3.5/Connect assessment](spark-versions.md); version targeting remains
   deferred until concrete advice justifies its runtime/vendor policy surface.
 
+## Shipped in v0.7.0
+
+- Version 1 trusted in-process plugin contract, explicit Config registration, scoped
+  metadata, shared baseline/suppression/SARIF/Git handling, and installed verification.
+- [Deterministic scan timing](../../benchmarks/performance.md), local initial
+  observation, and non-gating timing artifacts during release verification.
+- [Local pilot tooling](../../benchmarks/local-validation.md): permissioned snapshots,
+  blank blind labels, per-rule counts, and optional two-reviewer decision agreement.
+  No real corpus/labels have been supplied; this is not completed accuracy validation.
+
 ## Next: analysis and review contracts
 
 1. Revisit Spark-version targeting only for a demonstrated version-dependent rule,
    using the assessment above and explicit classic/Connect/vendor limits.
-2. Exercise the internal detector boundary on further independently justified
-   rules before considering a public plugin API. Preserve CLI/JSON/fingerprint
-   compatibility and avoid exposing analyzer state.
+2. Exercise the versioned plugin boundary with independently justified external
+   rules before adding loading/discovery or exposing any further facts. Preserve
+   CLI/JSON/fingerprint compatibility and keep AST/analyzer state private.
 3. Evaluate severity and confidence policy without presenting unmeasured precision
    as fact. Keep existing warnings and no semantics-changing automatic fixes.
 
@@ -72,8 +84,9 @@ Spark-version assessment—not a target-version configuration surface.
   false positives/KLOC, notebook coverage, and Spark/Python versions.
 - Add metamorphic cases, parser fuzzing, and optional heavyweight Spark semantic
   checks without importing Spark in production scans.
-- Measure scan time and memory on realistic repositories before adding caching
-  or concurrency. Avoid noisy blocking microbenchmarks on shared CI runners.
+- Use the new synthetic harness as a reproducibility check, then measure scan time
+  and memory on realistic repositories before adding caching or concurrency.
+  Avoid noisy blocking microbenchmarks on shared CI runners.
 - Revisit older scanner runtimes or standalone packaging based on user demand;
   the [compatibility assessment](python-compatibility.md) currently retains 3.12+.
 - Consider optional constant-SQL analysis and plugin loading only with clear
@@ -82,4 +95,5 @@ Spark-version assessment—not a target-version configuration surface.
 A 1.0 decision should be gated on stable interfaces, reproducible real-world
 quality evidence, and dependable CI ergonomics—not a target rule count. The
 synthetic corpus is regression coverage, not production accuracy. No external
-review, benchmark, performance, or broad-roadmap completion is implied by v0.6.0.
+review, real-world benchmark, production performance, or broad-roadmap completion
+is implied by v0.7.0.

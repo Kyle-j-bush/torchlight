@@ -11,6 +11,7 @@ from pathlib import Path
 from torchlight.analysis import SparkAnalyzer, format_syntax_error
 from torchlight.diagnostics import Finding
 from torchlight.notebooks import PYTHON_CELL_MAGICS, _parse_cell
+from torchlight.plugins import Plugin
 from torchlight.suppressions import apply_suppressions
 
 HEADER = "# Databricks notebook source"
@@ -18,7 +19,11 @@ SEPARATOR = "# COMMAND ----------"
 
 
 def scan_databricks_source(
-    path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    source: str,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     lines = source.splitlines(keepends=True)
     comments = {}
@@ -38,7 +43,7 @@ def scan_databricks_source(
 
     separators = [line for line, comment in comments.items() if comment == SEPARATOR]
     starts, ends = [0, *separators], [*(line - 1 for line in separators), len(lines)]
-    analyzer = SparkAnalyzer(str(path), assume_sessions)
+    analyzer = SparkAnalyzer(str(path), assume_sessions, plugins=plugins)
     findings, errors = [], []
     for cell, (start, end) in enumerate(zip(starts, ends, strict=True), 1):
         decoded = []
@@ -100,6 +105,7 @@ def scan_databricks_source(
             str(path),
             cell,
             line_offset=start,
+            rules=analyzer.rules,
         )
         findings.extend(cell_findings)
         errors.extend(cell_errors)

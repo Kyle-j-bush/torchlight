@@ -44,6 +44,14 @@ jobs:
       - run: python -m scripts.generate_rule_docs --check
       - run: python -m scripts.check_sarif
       - run: python -m unittest discover -s tests -v
+      - name: Record synthetic scan timing (no timing threshold)
+        run: python -m scripts.benchmark_scan > scan-timing.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scan-timing
+          path: scan-timing.md
+          if-no-files-found: error
+          retention-days: 7
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - run: python scripts/check_distribution.py

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.diagnostics import Finding
+from torchlight.plugins import Plugin
 from torchlight.suppressions import apply_suppressions
 
 PYTHON_CELL_MAGICS = {"capture", "debug", "prun", "time", "timeit"}
@@ -45,18 +46,27 @@ def _parse_cell(source: str, filename: str) -> tuple[ast.Module, str] | None:
 
 
 def scan_notebook(
-    path: Path, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Return (findings, errors), numbering code cells and their lines from 1."""
     try:
         source = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError) as exc:
         return [], [f"{path}: {exc}"]
-    return scan_notebook_source(path, source, assume_sessions=assume_sessions)
+    return scan_notebook_source(
+        path, source, assume_sessions=assume_sessions, plugins=plugins
+    )
 
 
 def scan_notebook_source(
-    path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    source: str,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Analyze notebook JSON in memory using the same cell boundaries as files."""
     try:
@@ -72,7 +82,7 @@ def scan_notebook_source(
 
     findings = []
     errors = []
-    analyzer = SparkAnalyzer(str(path), assume_sessions)
+    analyzer = SparkAnalyzer(str(path), assume_sessions, plugins=plugins)
     number = 0
     for index, cell in enumerate(cells, 1):
         if not isinstance(cell, dict):
@@ -103,7 +113,11 @@ def scan_notebook_source(
 
         tree, source = parsed
         cell_findings, cell_errors = apply_suppressions(
-            source, analyzer.analyze(tree, source, number), str(path), number
+            source,
+            analyzer.analyze(tree, source, number),
+            str(path),
+            number,
+            rules=analyzer.rules,
         )
         findings.extend(cell_findings)
         errors.extend(cell_errors)

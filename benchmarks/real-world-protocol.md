@@ -1,13 +1,13 @@
-# Real-world validation protocol — draft 1
+# Real-world validation protocol — draft 2
 
-**Status:** protocol only, October 18, 2026. No real-world corpus has been collected
+**Status:** protocol and local pilot tooling, October 18, 2026. No real-world corpus has been collected
 or independently labeled, and no production accuracy figures are claimed. The
-existing [36 synthetic cases](README.md) remain regression coverage, not benchmark
+existing [44 synthetic cases](README.md) remain regression coverage, not benchmark
 evidence. Do not execute any submitted source or notebook cells.
 
 ## Research questions
 
-For each of TL001–TL004, measure whether the warning is worth a Spark
+For each of TL001–TL005, measure whether the warning is worth a Spark
 reviewer's attention, how often relevant sites are missed, and the cost of
 scanning. Report Python and notebook results separately. Do not rank tools or
 claim runtime savings from source-pattern counts.
@@ -47,7 +47,7 @@ an unqualified overall prevalence or false-positives-per-KLOC claim.
 ## 3. Independent source audit
 
 Two Spark reviewers independently audit the complete sampled files **without
-seeing Torchlight output**. Enumerate candidate sites for all four rules,
+seeing Torchlight output**. Enumerate candidate sites for all five rules,
 including intentional uses, non-Spark lookalikes, and sites the scanner cannot
 currently resolve. This independent inventory is needed for recall; labeling only
 emitted warnings can measure precision but cannot establish recall.
@@ -57,7 +57,7 @@ For each site, record:
 | Field | Meaning |
 | --- | --- |
 | Snapshot, path, rule ID | Exact source and rule under review. |
-| Line, end line, code-cell number | One-based coordinates; `null` cell for Python. Notebook cell numbers count code cells in document order. |
+| Line, end line, cell number, call-start column | One-based coordinates; `null` cell for ordinary Python. Jupyter counts code cells with cell-local lines; Databricks counts all exported cells with physical `.py` lines/columns. |
 | Receiver/pattern evidence | Why it is Spark or not Spark; bound, partition, or loop evidence as relevant. |
 | Pattern present | `yes`, `no`, or `uncertain`; distinct from usefulness. |
 | Review decision | `surface`, `do-not-surface`, or `uncertain`, with rationale. |
@@ -144,3 +144,9 @@ thresholds **before** the next held-out evaluation. Do not declare 98% precision
 beat a competitor, or establish a 1.0 quality gate from this protocol alone.
 Dataset collection and reviewer recruitment remain follow-up work; no external
 reviewers or datasets are represented as secured by this PR.
+
+The [local pilot runner](local-validation.md) now implements frozen hash manifests,
+blank labeling templates, exact call-start matching, and private aggregate counts.
+Single-reviewer runs remain provisional. Coverage audits, pattern labels,
+confidence intervals, source permissions, and real independent reviewers are not
+provided by running the script; those protocol requirements remain open.

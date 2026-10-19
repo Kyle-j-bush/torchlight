@@ -100,7 +100,7 @@ class Scanner:
         baseline = None
         if comparison is None and use_baseline and self.config.baseline is not None:
             try:
-                baseline = read_baseline(self.config.baseline)
+                baseline = read_baseline(self.config.baseline, rules=self.config.rules)
             except BaselineError as exc:
                 return ScanReport(
                     errors=(f"baseline error: {exc}",), root=self.config.root
@@ -157,7 +157,9 @@ class Scanner:
                         continue
                     seen.add(resolved)
                     file_findings, file_errors = scan_file(
-                        file, assume_sessions=self.config.assume_sessions
+                        file,
+                        assume_sessions=self.config.assume_sessions,
+                        plugins=self.config.plugins,
                     )
                     errors.extend(file_errors)
                     if comparison is not None:
@@ -180,6 +182,7 @@ class Scanner:
                                     previous_path,
                                     source,
                                     assume_sessions=self.config.assume_sessions,
+                                    plugins=self.config.plugins,
                                 )
                                 errors.extend(
                                     f"Git base {comparison.base[:12]}: {error}"

@@ -10,6 +10,7 @@ from torchlight.detectors import DETECTORS
 from torchlight.diagnostics import RULES, Finding, Location
 from torchlight.facts import CallFacts, Value
 from torchlight.identity import call_key
+from torchlight.plugins import Plugin
 
 PARSE_FLAGS = ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
 
@@ -218,8 +219,16 @@ class SparkAnalyzer(ast.NodeVisitor):
     and branch-dependent types lose identity rather than guessing a Spark type.
     """
 
-    def __init__(self, path: str, assume_sessions: tuple[str, ...] = ()):
+    def __init__(
+        self,
+        path: str,
+        assume_sessions: tuple[str, ...] = (),
+        *,
+        plugins: tuple[Plugin, ...] = (),
+    ):
         self.path = path
+        self.detectors = (*DETECTORS, *plugins)
+        self.rules = {**RULES, **{plugin.rule.code: plugin.rule for plugin in plugins}}
         self.state: dict[str, Value] = {
             name: Value("materializer", name) for name in ("list", "tuple")
         }
@@ -272,7 +281,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         return f"{description} ({self._location(node).describe()})"
 
     def _emit(self, code: str, node: ast.Call, evidence: tuple[str, ...], detail=""):
-        message = RULES[code].title + detail
+        message = self.rules[code].title + detail
         self.findings.append(
             Finding(
                 self.path,
@@ -282,6 +291,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 message,
                 evidence,
                 self.lines[node.lineno - 1].strip(),
+                custom_rule=self.rules[code] if code not in RULES else None,
                 structural_key=call_key(node, self.parents),
             )
         )
@@ -474,7 +484,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 for target in self.assignment_targets
             ),
         )
-        for detector in DETECTORS:
+        for detector in self.detectors:
             for diagnostic in detector.check(facts):
                 self._emit(
                     diagnostic.rule_id, node, diagnostic.evidence, diagnostic.detail
