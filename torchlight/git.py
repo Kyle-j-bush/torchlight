@@ -18,7 +18,14 @@ class GitError(ValueError):
 def _git(root: Path, *arguments: str) -> bytes:
     try:
         result = subprocess.run(
-            ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *arguments],
+            [
+                "git",
+                "--no-lazy-fetch",
+                "--no-optional-locks",
+                "-c",
+                "core.fsmonitor=false",
+                *arguments,
+            ],
             cwd=root,
             env={**os.environ, "GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"},
             capture_output=True,

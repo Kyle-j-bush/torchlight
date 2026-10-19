@@ -59,6 +59,14 @@ class GitRepository(unittest.TestCase):
 
 
 class GitTests(GitRepository):
+    def test_every_git_command_disables_lazy_fetching(self):
+        with patch("torchlight.git.subprocess.run", wraps=subprocess.run) as run:
+            self.compare()
+        self.assertTrue(run.call_args_list)
+        for call in run.call_args_list:
+            self.assertIn("--no-lazy-fetch", call.args[0])
+            self.assertEqual(call.kwargs["env"]["GIT_NO_LAZY_FETCH"], "1")
+
     def test_comparison_does_not_modify_index_worktree_or_refs(self):
         self.path.write_text(SOURCE + "# changed\n", encoding="utf-8")
         index = (self.root / ".git/index").read_bytes()
@@ -503,3 +511,4 @@ class ComparisonTests(GitRepository):
         self.git("init", "--template=", str(nested))
         self.write("nested/new.py", SOURCE)
         self.assertEqual(self.scan(nested).exit_code, 2)
+        self.assertEqual(self.scan().exit_code, 0)

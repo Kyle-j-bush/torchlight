@@ -113,6 +113,14 @@ class Scanner:
         def discovery_error(exc: OSError) -> None:
             errors.append(f"{exc.filename}: {exc.strerror or exc}")
 
+        def discovery_excluded(path: Path) -> bool:
+            return self.config.is_excluded(path) or (
+                comparison is not None
+                and path.is_dir()
+                and path.resolve() != comparison.root
+                and (path / ".git").exists()
+            )
+
         for path in inputs:
             try:
                 if comparison is not None:
@@ -124,7 +132,7 @@ class Scanner:
                 if path.is_dir():
                     files = iter_source_files(
                         path,
-                        is_excluded=self.config.is_excluded,
+                        is_excluded=discovery_excluded,
                         on_error=discovery_error,
                     )
                 elif path.is_file() and path.suffix in SOURCE_SUFFIXES:
