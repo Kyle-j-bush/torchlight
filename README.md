@@ -16,10 +16,10 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-**v0.6.0** adds Databricks Python source notebooks and TL005 for eager
-`list()`/`tuple()` consumption of Spark local iterators. Git-base comparison
-shipped in v0.5.0; the scanner API shipped in v0.4.0. See the
-[Spark-version assessment](docs/development/spark-versions.md) for targeting limits.
+**v0.7.0** adds explicitly registered Python detector plugins, a reproducible
+synthetic timing harness, and private local corpus-validation tools. No real-world
+accuracy results are claimed. Databricks notebooks and TL005 shipped in v0.6.0;
+Git comparison shipped in v0.5.0. See the [plugin trust boundary](docs/plugins.md).
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -165,7 +165,7 @@ Add the isolated-install hook to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.6.0
+    rev: v0.7.0
     hooks:
       - id: torchlight
 ```
@@ -218,7 +218,7 @@ for history errors, rename limits, and why full SARIF uploads remain necessary.
   Known expanding operations, including joins and common generators, discard
   row bounds. A row limit—even a very large one—does **not** prove memory safety.
   Dynamic limits, custom generators, and runtime sizes cannot be fully inferred.
-- Notebook cells are analyzed in **document order**, not execution-counter order.
+- Jupyter cells are analyzed in **document order**, not execution-counter order.
   Definitions, aliases, and bounds flow across code cells. Cell numbers count code
   cells only. Top-level `await`, shell escapes, `%matplotlib`, and Python cell
   magics (`capture`, `debug`, `prun`, `time`, `timeit`) are supported.
@@ -251,6 +251,12 @@ source. `Scanner()` uses built-in policy without implicit configuration discover
 See the [Python API reference](docs/python-api.md) for paths, baselines, errors,
 and the pre-1.0 compatibility policy.
 
+Since v0.7.0, `Config(plugins=(Plugin(rule, detector),))` explicitly registers
+trusted in-process detectors through [plugin API version 1](docs/plugins.md).
+No automatic discovery or CLI/TOML loading is added. Plugins execute arbitrary
+local Python; the scanner's never-execute promise applies to scanned source,
+**not plugins**. Keep plugins stateless for repeatable scans and Git comparisons.
+
 ## Regression coverage
 
 ```sh
@@ -258,12 +264,16 @@ python -m unittest discover -s tests
 python -m scripts.check_benchmark
 ```
 
-The [public corpus](benchmarks/README.md) has 36 labeled **synthetic** Python and
+The [public corpus](benchmarks/README.md) has 44 labeled **synthetic** Python and
 notebook cases, including intentional uses and unrelated methods. It is regression
 coverage, not a measured production accuracy claim. Next comes validation with
 real Spark reviewers and permissioned code before adding more rules.
 The [real-world benchmark protocol](benchmarks/real-world-protocol.md) specifies
 permission, independent labeling, and per-rule metrics; no results are claimed yet.
+The [local pilot runner](benchmarks/local-validation.md) prepares frozen manifests
+and blank labels before scanning; private source/results stay outside this repo.
+The [scan-timing harness](benchmarks/performance.md) records reproducible synthetic
+timings without a noisy CI speed gate. Neither replaces real-world validation.
 
 ## Documentation
 

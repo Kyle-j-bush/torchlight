@@ -45,7 +45,7 @@ rule. Plugin findings are warnings with no automatic fix, like built-in findings
 - A detector exception, invalid result, wrong ID, or missing evidence becomes a
   scan error, never a clean pass. Exception type and plugin ID are reported without
   the exception message (which could contain private data). Failed file analysis
-  is discarded; earlier files may still have findings. Exit-code semantics remain
+  is discarded; other files continue and Git-base failures remain explicit. Exit-code semantics remain
   0 clean / 1 findings, possibly with errors / 2 errors only. Check `report.errors`.
 - Plugins are **trusted arbitrary local code**. They can access files/network,
   mutate global state, hang, print, or raise process-control exceptions. There is

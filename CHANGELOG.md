@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.7.0 — 2026-10-18
+
+### Added
+
+- Public `torchlight.plugins` API version 1: immutable facts, diagnostics, detector
+  protocol, and explicit `Plugin` registration through programmatic `Config`.
+  Duplicate/reserved IDs, malformed metadata, unsupported API versions, and bad
+  detector results fail explicitly. No plugin discovery, module/dependency loading,
+  or new CLI/TOML plugin setting is introduced.
+- Scoped plugin rule catalogs shared by inference, inline suppressions, strict
+  baselines, all report formats, and Git base/current scans. Detached findings
+  retain their rule metadata. Built-in-only output and identity are preserved;
+  plugin SARIF descriptors do not invent links to Torchlight rule guides.
+- A deterministic Python/Jupyter/Databricks scan-timing harness with warm-up,
+  five samples, source/workload digests, and median/range. Release verification
+  retains a separate timing artifact; elapsed time never gates CI. A local
+  synthetic observation is documented, not presented as production throughput.
+- Local real-world pilot tooling: permission attestation, frozen byte-hash manifest,
+  blank blind-label template, exact source-site matching, per-rule counts and
+  provisional fractions, and two-reviewer decision agreement when supplied.
+  Private artifacts must stay outside the repository; no source is uploaded.
+  Source changes, incomplete review attestations, and malformed labels fail;
+  uncertain/unreviewed sites and scan failures withhold definitive metrics.
+- Public extension/security guides, pilot workflow, installed-plugin verification,
+  and a ninth pinned OASIS SARIF schema variant.
+
+### Trust and compatibility notes
+
+Plugins are opt-in **arbitrary trusted Python code**, not sandboxed. They must be
+stateless/deterministic for repeated and differential scans. Selection filters
+findings, not plugin execution. Exceptions become scan errors without echoing
+their messages; process-control exceptions, timeouts, and malicious plugins are
+not isolated. Never-execute guarantees apply to scanned source, not plugin code.
+
+Default `Config.select` is normalized to the registered catalog (built-ins when
+no plugins are supplied); explicit selections still replace defaults. Existing
+CLI behavior, exports, built-in warnings, JSON/fingerprint/baseline schemas,
+coordinates, exit codes, Python 3.12+, and zero runtime dependencies remain.
+Python interfaces are still pre-1.0, with a separately versioned plugin contract.
+
+**Real-world validation is not complete:** no permissioned corpus or independent
+labels have been received, and no production accuracy figures are claimed.
+Single-reviewer runs are provisional. Opaque-cell coverage, statistical intervals,
+and realistic performance/memory validation remain protocol work. Spark-version
+flags, automatic fixes, SQL analysis, and LSP remain deferred.
+
 ## 0.6.0 — 2026-10-18
 
 ### Added

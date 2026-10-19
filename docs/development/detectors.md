@@ -20,5 +20,7 @@ TL001–TL003 were migrated without changing their findings. Golden tests captur
 from v0.3.0 protect their complete JSON/text output and fingerprints for Python
 and notebook locations; the existing regression corpus protects broader behavior.
 
-These modules are **internal**, not a supported third-party plugin interface.
-No dynamic plugin loading, dependency, or execution permission is introduced.
+Implementation modules remain **internal**. Since v0.7.0 third parties instead use
+the separately versioned exports in [torchlight.plugins](../plugins.md), registering
+trusted objects explicitly through programmatic Config. The analyzer and built-in
+registry remain private. No dynamic discovery, dependency loading, or sandbox is added.

@@ -73,7 +73,8 @@ described in [SECURITY.md](SECURITY.md).
   catalog with `python -m scripts.generate_rule_docs` after metadata changes.
 - Follow the [internal detector guide](docs/development/detectors.md): rules consume
   semantic facts instead of reimplementing receiver inference. Keep the original
-  rules' golden output/fingerprint tests intact; no public plugin API is promised.
+   rules' golden output/fingerprint tests intact. External extensions use the
+   [separately versioned plugin API](docs/plugins.md), never AST/state internals.
 - Preserve the [public Python API](docs/python-api.md) and CLI parity. Incompatible
   pre-1.0 API changes require minor-release notes; keep AST/state internals private.
 - Configuration discovery, precedence, and glob semantics are compatibility
@@ -91,6 +92,10 @@ boundaries, and development decisions. The first compatibility assessment is in
 [docs/development/python-compatibility.md](docs/development/python-compatibility.md).
 Real-world validation must follow the [benchmark protocol](benchmarks/real-world-protocol.md);
 the synthetic corpus does not establish production accuracy.
+The [local pilot runner](benchmarks/local-validation.md) keeps private manifests,
+labels and raw reports outside this checkout. Do not commit donated source or
+pilot artifacts. [Synthetic timings](benchmarks/performance.md) are reproducible
+observations, not CI speed thresholds or production performance claims.
 
 To exercise the repository's hook manifest, install pre-commit in a development
 environment, then run:
@@ -153,6 +158,8 @@ The release workflow verifies that the tag matches the package version and is
 on `main`'s history, rebuilds and tests both archives, then passes only those
 artifacts to the isolated publishing job. It publishes provenance attestations
 alongside the package. TestPyPI is not used.
+Release verification also retains a separate `scan-timing` artifact for seven days;
+it is not sent to PyPI and has no elapsed-time threshold.
 
 PyPI versions and version tags are immutable: fix a bad release with a new
 version rather than replacing existing files.
