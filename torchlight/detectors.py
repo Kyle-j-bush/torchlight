@@ -1,10 +1,7 @@
 # Copyright 2026 Kyle Bush
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal detectors consume resolved facts, not Python syntax or mutable state.
-
-This interface is intentionally not a public plugin API yet.
-"""
+"""Built-in detectors; public extension types are exported by torchlight.plugins."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass

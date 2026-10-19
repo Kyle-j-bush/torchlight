@@ -64,6 +64,27 @@ assert report.exit_code == 1 and not report.errors
 assert len(report.findings) == 1 and report.findings[0].rule_id == 'TL005'
 assert report.findings[0].location == Location(7, 9, 2)
 """
+PLUGIN_API_CHECK = """
+import json
+import sys
+from torchlight import Config, Rule, Scanner
+from torchlight.plugins import API_VERSION, CallFacts, Diagnostic, Plugin
+
+class Review:
+    rule_id = 'DIST001'
+    def check(self, facts: CallFacts):
+        if facts.receiver.kind == 'frame' and facts.method == 'collect':
+            yield Diagnostic(self.rule_id, (facts.receiver.origin,))
+
+assert API_VERSION == 1
+rule = Rule('DIST001', 'Distribution plugin', 'Local policy.', 'Review it.')
+report = Scanner(Config(plugins=(Plugin(rule, Review()),), select={'DIST001'})).scan(sys.argv[1])
+assert not report.errors and len(report.findings) == 1
+assert report.findings[0].rule == rule
+assert report.to_dict()['findings'][0]['rule_id'] == 'DIST001'
+assert json.loads(report.render('sarif'))['runs'][0]['tool']['driver']['rules'][-1]['id'] == 'DIST001'
+assert [f.rule_id for f in Scanner().scan(sys.argv[1]).findings] == ['TL001']
+"""
 
 
 def check_install(archive: Path, project: dict) -> None:
@@ -125,6 +146,11 @@ def check_install(archive: Path, project: dict) -> None:
         )
         subprocess.run(
             [str(python), "-I", "-c", API_CHECK, str(source)],
+            cwd=work,
+            check=True,
+        )
+        subprocess.run(
+            [str(python), "-I", "-c", PLUGIN_API_CHECK, str(source)],
             cwd=work,
             check=True,
         )

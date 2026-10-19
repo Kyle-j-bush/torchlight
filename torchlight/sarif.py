@@ -18,13 +18,18 @@ REPOSITORY = "https://github.com/Kyle-j-bush/torchlight"
 def sarif_report(findings: list[Finding], errors: list[str], root: Path) -> dict:
     root = root.resolve()
     root_uri = root.as_uri().rstrip("/") + "/"
+    catalog = {**RULES, **{finding.rule_id: finding.rule for finding in findings}}
     rules = [
         {
             "id": code,
             "name": code,
             "shortDescription": {"text": rule.title},
             "fullDescription": {"text": rule.explanation},
-            "helpUri": f"{REPOSITORY}/blob/main/docs/rules/{code}.md",
+            **(
+                {"helpUri": f"{REPOSITORY}/blob/main/docs/rules/{code}.md"}
+                if code in RULES
+                else {}
+            ),
             "help": {"text": f"{rule.explanation}\n\nReview: {rule.recommendation}"},
             "defaultConfiguration": {"level": "warning"},
             "properties": {
@@ -32,9 +37,9 @@ def sarif_report(findings: list[Finding], errors: list[str], root: Path) -> dict
                 "problem.severity": "warning",
             },
         }
-        for code, rule in RULES.items()
+        for code, rule in catalog.items()
     ]
-    indices = {code: index for index, code in enumerate(RULES)}
+    indices = {code: index for index, code in enumerate(catalog)}
     results = []
     occurrences = Counter()
     for finding in findings:

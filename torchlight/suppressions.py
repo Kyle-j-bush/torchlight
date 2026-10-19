@@ -20,6 +20,7 @@ def apply_suppressions(
     cell: int | None = None,
     *,
     line_offset: int = 0,
+    rules=RULES,
 ) -> tuple[list[Finding], list[str]]:
     """Suppress only findings starting or ending on a valid directive's line."""
     ignored: dict[int, set[str]] = {}
@@ -32,7 +33,7 @@ def apply_suppressions(
         codes = (
             {code.strip() for code in directive[1].split(",")} if directive else set()
         )
-        if not codes or not codes <= RULES.keys():
+        if not codes or not codes <= rules.keys():
             position = f"cell {cell},line {line}" if cell is not None else line
             errors.append(
                 f"{path}:{position}: invalid suppression; use "

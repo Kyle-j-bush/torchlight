@@ -11,6 +11,7 @@ from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.databricks import HEADER, scan_databricks_source
 from torchlight.diagnostics import Finding
 from torchlight.notebooks import scan_notebook, scan_notebook_source
+from torchlight.plugins import Plugin
 from torchlight.suppressions import apply_suppressions
 
 SOURCE_SUFFIXES = {".py", ".ipynb"}
@@ -50,42 +51,62 @@ def iter_source_files(
 
 
 def scan_python(
-    path: Path, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Return (findings, errors) for a Python file."""
     try:
         source = path.read_text(encoding="utf-8-sig")
     except (OSError, ValueError) as exc:
         return [], [f"{path}: {format_syntax_error(exc)}"]
-    return scan_python_source(path, source, assume_sessions=assume_sessions)
+    return scan_python_source(
+        path, source, assume_sessions=assume_sessions, plugins=plugins
+    )
 
 
 def scan_python_source(
-    path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    source: str,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Analyze in-memory Python without importing or executing it."""
     if source.split("\n", 1)[0].rstrip() == HEADER:
-        return scan_databricks_source(path, source, assume_sessions=assume_sessions)
+        return scan_databricks_source(
+            path, source, assume_sessions=assume_sessions, plugins=plugins
+        )
     try:
         tree = parse_source(source, str(path))
     except (SyntaxError, ValueError) as exc:
         return [], [f"{path}: {format_syntax_error(exc)}"]
 
-    analyzer = SparkAnalyzer(str(path), assume_sessions)
-    return apply_suppressions(source, analyzer.analyze(tree, source), str(path))
+    analyzer = SparkAnalyzer(str(path), assume_sessions, plugins=plugins)
+    return apply_suppressions(
+        source, analyzer.analyze(tree, source), str(path), rules=analyzer.rules
+    )
 
 
 def scan_file(
-    path: Path, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Scan one source file, dispatching on its suffix."""
     if path.suffix == ".ipynb":
-        return scan_notebook(path, assume_sessions=assume_sessions)
-    return scan_python(path, assume_sessions=assume_sessions)
+        return scan_notebook(path, assume_sessions=assume_sessions, plugins=plugins)
+    return scan_python(path, assume_sessions=assume_sessions, plugins=plugins)
 
 
 def scan_source(
-    path: Path, source: bytes, *, assume_sessions: tuple[str, ...] = ()
+    path: Path,
+    source: bytes,
+    *,
+    assume_sessions: tuple[str, ...] = (),
+    plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Analyze a Git blob, matching file decoding and universal newline handling."""
     try:
@@ -93,4 +114,4 @@ def scan_source(
     except UnicodeError as exc:
         return [], [f"{path}: {exc}"]
     scanner = scan_notebook_source if path.suffix == ".ipynb" else scan_python_source
-    return scanner(path, text, assume_sessions=assume_sessions)
+    return scanner(path, text, assume_sessions=assume_sessions, plugins=plugins)
