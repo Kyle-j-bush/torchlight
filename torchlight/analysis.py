@@ -242,8 +242,9 @@ class SparkAnalyzer(ast.NodeVisitor):
     def analyze(
         self, tree: ast.Module, source: str, cell: int | None = None
     ) -> list[Finding]:
+        if source is not self.source:
+            self.lines = source.splitlines()
         self.source, self.cell = source, cell
-        self.lines = source.splitlines()
         self.findings = []
         self.parents = {
             child: parent

@@ -66,6 +66,8 @@ RULES = {
 
 @dataclass(frozen=True)
 class Location:
+    """Physical .py coordinates; .ipynb coordinates are relative to code cells."""
+
     line: int
     column: int = 1
     cell: int | None = None

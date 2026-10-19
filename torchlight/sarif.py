@@ -49,7 +49,7 @@ def sarif_report(findings: list[Finding], errors: list[str], root: Path) -> dict
         )
         location = finding.location
         physical = {"artifactLocation": artifact}
-        if location.cell is None:
+        if location.cell is None or path.suffix == ".py":
             physical["region"] = {
                 "startLine": location.line,
                 "startColumn": location.column,

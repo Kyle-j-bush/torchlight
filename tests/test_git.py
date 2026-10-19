@@ -239,6 +239,23 @@ class GitTests(GitRepository):
 
 
 class ComparisonTests(GitRepository):
+    def test_databricks_source_mapping_and_tl005_comparison(self):
+        setup = "# Databricks notebook source\nfrom pyspark.sql import SparkSession\ndf = SparkSession.builder.getOrCreate().table('events')\n"
+        cell = "# COMMAND ----------\n# MAGIC %python\n# MAGIC list(df.toLocalIterator())\n"
+        self.path.write_text(setup + cell, encoding="utf-8")
+        self.commit()
+        self.base = self.git("rev-parse", "HEAD").strip()
+        shifted = setup + "# COMMAND ----------\n# inserted cell\n" + cell
+        self.path.write_text(shifted, encoding="utf-8")
+        self.assertEqual(self.scan().exit_code, 0)
+        self.path.write_text(shifted + cell, encoding="utf-8")
+        report = self.scan()
+        self.assertEqual(report.errors, ())
+        self.assertEqual(len(report.findings), 1)
+        self.assertEqual(report.findings[0].rule_id, "TL005")
+        self.assertEqual(report.findings[0].location.cell, 4)
+        self.assertEqual(report.findings[0].location.line, 11)
+
     def scan(self, paths=None, **policy):
         return Scanner(Config(root=self.root, **policy)).scan(
             self.root if paths is None else paths, changed_from=self.base

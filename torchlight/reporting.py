@@ -20,7 +20,7 @@ def escape_command(value: str, *, property_value: bool = False) -> str:
 def github_annotation(finding: Finding) -> str:
     location = finding.location
     properties = [f"file={escape_command(finding.path, property_value=True)}"]
-    if location.cell is None:
+    if location.cell is None or Path(finding.path).suffix == ".py":
         properties.extend((f"line={location.line}", f"col={location.column}"))
     # Notebook cell coordinates are not raw .ipynb JSON line numbers. Use a
     # file-level annotation rather than pointing GitHub to an unrelated JSON line.

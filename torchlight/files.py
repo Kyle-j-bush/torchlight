@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
+from torchlight.databricks import HEADER, scan_databricks_source
 from torchlight.diagnostics import Finding
 from torchlight.notebooks import scan_notebook, scan_notebook_source
 from torchlight.suppressions import apply_suppressions
@@ -63,6 +64,8 @@ def scan_python_source(
     path: Path, source: str, *, assume_sessions: tuple[str, ...] = ()
 ) -> tuple[list[Finding], list[str]]:
     """Analyze in-memory Python without importing or executing it."""
+    if source.split("\n", 1)[0].rstrip() == HEADER:
+        return scan_databricks_source(path, source, assume_sessions=assume_sessions)
     try:
         tree = parse_source(source, str(path))
     except (SyntaxError, ValueError) as exc:

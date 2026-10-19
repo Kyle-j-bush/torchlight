@@ -255,6 +255,18 @@
       "description": "A join removes the row bound before eager iterator consumption.",
       "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    list(events.limit(10).join(other).toLocalIterator())"],
       "expected": [["TL005", 3, null]]
+    },
+    {
+      "name": "databricks-eager-iterator",
+      "description": "Decoded Python source exports retain physical lines and exported cell numbers.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "df = SparkSession.builder.getOrCreate().table('events')", "# COMMAND ----------", "# MAGIC %python", "# MAGIC list(df.toLocalIterator())"],
+      "expected": [["TL005", 6, 2]]
+    },
+    {
+      "name": "databricks-opaque-boundary",
+      "description": "Opaque Databricks magic cells discard stale Python receiver evidence.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "df = SparkSession.builder.getOrCreate().table('events')", "# COMMAND ----------", "# MAGIC %run ./other", "# COMMAND ----------", "df.collect()"],
+      "expected": []
     }
   ]
 }
