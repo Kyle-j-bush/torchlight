@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.6.0 — 2026-10-18
+
+### Added
+
+- **TL005:** proven built-in `list()`/`tuple()` consumption of an unbounded known
+  Spark `toLocalIterator()`, including local aliases, row-bound invalidation,
+  shadowing, notebook boundaries, reasoned suppression, baselines, and Git review.
+  Bare streaming iteration is not reported; this rule targets eager retention.
+- Databricks Python source exports: first-line header recognition, token-aware
+  cell delimiters and `# MAGIC` decoding, `%python`, shared document-order state,
+  and conservative invalidation at opaque language/magic cells. Strings cannot
+  spoof cell markers. No notebook code, magic, dependencies, or shell escapes run.
+- Exported cell numbers with physical `.py` line/column/end-line mapping, including
+  magic prefixes and Unicode. GitHub/SARIF link to physical source; `.ipynb`
+  coordinates remain cell-relative. New source-format and rule guides explain limits.
+- An upstream Spark 3.3–3.5 API/Connect assessment. No `target-spark` flag is added:
+  the current warnings do not require one, and version alone omits runtime/vendor
+  distinctions. No Spark runtime or vendor compatibility certification is implied.
+- Eight additional synthetic cases (44 total), source mapping and iterator tests,
+  an eighth SARIF schema variant, and installed archive/API/CLI verification.
+
+### Upgrade notes
+
+TL005 is enabled by default; explicit selections must include it to opt in.
+Databricks-header `.py` files now follow notebook cell boundaries rather than
+ordinary whole-file semantics. Their `cell` field is populated, but coordinates
+are physical file positions, **not** Jupyter cell-local positions. Consumers
+must distinguish `.py` source exports from `.ipynb`. Opaque cells can remove stale
+findings; unterminated multiline constructs fail rather than guessing boundaries.
+Ordinary Python and Jupyter behavior, original-rule output/fingerprints, public
+exports, schemas, exit codes, Python 3.12+, and zero runtime dependencies remain.
+No public plugin API, automatic fixes, new severities, or production accuracy claims.
+
 ## 0.5.0 — 2026-10-18
 
 ### Added

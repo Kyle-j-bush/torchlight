@@ -7,6 +7,7 @@ required. Source is parsed, never imported or executed.
 ```python
 # Databricks notebook source
 from pyspark.sql import SparkSession
+
 df = SparkSession.builder.getOrCreate().table("events")
 
 # COMMAND ----------
@@ -14,7 +15,7 @@ df = SparkSession.builder.getOrCreate().table("events")
 # MAGIC rows = list(df.toLocalIterator())
 ```
 
-This reports TL005 at **physical file line 7, column 16, cell 2**. It does not
+This reports TL005 at **physical file line 8, column 16, cell 2**. It does not
 pretend that the decoded Python column is the physical column after `# MAGIC `.
 
 ## Recognition and state

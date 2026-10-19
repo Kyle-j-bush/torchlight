@@ -1,11 +1,11 @@
 # Project configuration
 
 Available in v0.3.0+. Older releases do not read project configuration.
-TL004 in the example below requires v0.4.0+.
+TL004 requires v0.4.0+; TL005 requires v0.6.0+.
 
 ```toml
 [tool.torchlight]
-select = ["TL001", "TL002", "TL003", "TL004"]
+select = ["TL001", "TL002", "TL003", "TL004", "TL005"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
 assume-spark-session = ["spark"]

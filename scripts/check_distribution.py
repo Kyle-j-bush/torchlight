@@ -55,6 +55,15 @@ assert report.exit_code == 1 and not report.errors
 assert len(report.findings) == 1
 assert 'toPandas' in report.findings[0].message
 """
+SOURCE_EXPORT_API_CHECK = """
+from pathlib import Path
+from torchlight import Config, Location, Scanner
+
+report = Scanner(Config(root=Path.cwd())).scan('export.py', changed_from='HEAD')
+assert report.exit_code == 1 and not report.errors
+assert len(report.findings) == 1 and report.findings[0].rule_id == 'TL005'
+assert report.findings[0].location == Location(7, 9, 2)
+"""
 
 
 def check_install(archive: Path, project: dict) -> None:
@@ -283,6 +292,59 @@ def check_install(archive: Path, project: dict) -> None:
                 raise SystemExit(
                     f"Installed Git comparison report failed: {result.stdout}"
                 )
+
+        source = repository / "export.py"
+        export_base = (
+            "# Databricks notebook source\nfrom pyspark.sql import SparkSession\n"
+            "df = SparkSession.builder.getOrCreate().table('events')\ndf.collect()\n"
+        )
+        source.write_text(export_base, encoding="utf-8")
+        for arguments in (["add", "export.py"], ["commit", "-m", "source export base"]):
+            subprocess.run(
+                ["git", "-c", "commit.gpgsign=false", *arguments],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+            )
+        source.write_text(
+            export_base
+            + "# COMMAND ----------\n# MAGIC %python\n# MAGIC list(df.toLocalIterator())\n",
+            encoding="utf-8",
+        )
+        subprocess.run(
+            [str(python), "-I", "-c", SOURCE_EXPORT_API_CHECK],
+            cwd=repository,
+            check=True,
+        )
+        for entry in ([str(command)], [str(python), "-I", "-m", "torchlight"]):
+            result = subprocess.run(
+                [
+                    *entry,
+                    "--no-config",
+                    "--changed-from",
+                    "HEAD",
+                    "--format",
+                    "sarif",
+                    "export.py",
+                ],
+                cwd=repository,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 1 or result.stderr:
+                raise SystemExit(f"Installed source notebook failed: {result}")
+            run = json.loads(result.stdout)["runs"][0]
+            results = run["results"]
+            if (
+                not run["invocations"][0]["executionSuccessful"]
+                or len(results) != 1
+                or results[0]["ruleId"] != "TL005"
+                or results[0]["locations"][0]["physicalLocation"]["region"]
+                != {"startLine": 7, "startColumn": 9, "endLine": 7}
+                or results[0]["properties"]["notebookLocation"]["cell"] != 2
+            ):
+                raise SystemExit(f"Installed source mapping failed: {result.stdout}")
 
 
 def main() -> None:

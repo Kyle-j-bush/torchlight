@@ -38,10 +38,16 @@ and relative to `%SRCROOT%`, the configuration root; outside-root artifacts use
 absolute file URIs. For GitHub display, SARIF resolves symlink targets. Baselines
 instead retain named paths, as documented in [baseline matching](baselines.md).
 
-Notebooks have file-level physical locations, **no fake raw-JSON line regions**.
+Jupyter notebooks have file-level physical locations, **no fake raw-JSON line regions**.
 Messages include code-cell coordinates, also available under
 `properties.notebookLocation`. GitHub may offer only limited file-level navigation;
 this is not a cell-aware notebook review integration.
+
+Databricks Python source exports (v0.6.0+) instead use physical `.py` regions,
+including columns after `# MAGIC` prefixes, and exported cell metadata. Their
+`line`, `column`, and `endLine` in `notebookLocation` are physical coordinates,
+not Jupyter code-cell-local coordinates. JSON schema 1 is unchanged; integrations
+must distinguish these source kinds. See [source mapping](databricks.md).
 
 Scan, configuration, and baseline errors appear as invocation notifications with
 `executionSuccessful: false`, even if findings are also present. A clean SARIF

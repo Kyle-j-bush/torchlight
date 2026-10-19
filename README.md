@@ -16,9 +16,10 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-**v0.5.0** adds Git-base comparison for PR reviews through `--changed-from` and
-the Python API. The scanner API and `repartition(1)` rule shipped in v0.4.0;
-shared configuration, fingerprints, baselines, and SARIF shipped in v0.3.0.
+**v0.6.0** adds Databricks Python source notebooks and TL005 for eager
+`list()`/`tuple()` consumption of Spark local iterators. Git-base comparison
+shipped in v0.5.0; the scanner API shipped in v0.4.0. See the
+[Spark-version assessment](docs/development/spark-versions.md) for targeting limits.
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -36,7 +37,7 @@ python -m torchlight jobs/ notebooks/
 # Or: python main.py <paths...>
 ```
 
-## Four focused checks
+## Five focused checks
 
 | Rule | What deserves review | What is not automatically wrong |
 | --- | --- | --- |
@@ -44,6 +45,7 @@ python -m torchlight jobs/ notebooks/
 | **TL002** | A known `.coalesce(1)` feeding a terminal DataFrame write | A small single-partition export; `.coalesce()` without a write is not reported |
 | **TL003** | Assigning `.withColumn()` back to a loop-carried DataFrame | A fresh DataFrame each iteration, independent projections, or a known single-iteration loop |
 | **TL004** | A known literal `.repartition(1)` feeding a terminal DataFrame write | A small intentional export; no warning for repartition alone or restored parallelism |
+| **TL005** | Built-in `list()`/`tuple()` eagerly retaining an unbounded known Spark local iterator | Ordinary streaming iteration or a recognized explicit row bound |
 
 **`.distinct()` alone is not a finding.** It often expresses a legitimate requirement.
 
@@ -95,7 +97,7 @@ or above the working directory.
 
 ```toml
 [tool.torchlight]
-select = ["TL001", "TL002", "TL003", "TL004"]
+select = ["TL001", "TL002", "TL003", "TL004", "TL005"]
 ignore = []
 exclude = ["generated/**", "vendor/**"]
 # Optional, after capturing and reviewing existing debt:
@@ -126,6 +128,11 @@ torchlight --assume-spark-session spark notebooks/
 The option is repeatable. Explicit reassignments and opaque cells still invalidate
 these assumptions.
 
+Exported Databricks `.py` notebooks are recognized by their first-line header.
+Cell boundaries and `# MAGIC %python` are understood; opaque magics invalidate
+state. Reports include exported cell numbers and physical file coordinates.
+See [source-notebook support and limits](docs/databricks.md).
+
 ## Use in CI and pre-commit
 
 ```sh
@@ -138,8 +145,9 @@ JSON uses `schema_version: 1` and includes `findings` and `errors`. Findings car
 rule IDs, one-based line/column locations, optional code-cell numbers, evidence,
 explanations, recommendations, source snippets, and versioned structural
 fingerprints. Errors also go to stderr.
-GitHub output produces escaped Actions annotations; notebooks use file-level
-annotations with cell locations in the message, not misleading JSON line numbers.
+GitHub output produces escaped Actions annotations; Jupyter notebooks use
+file-level annotations with cell locations, not misleading JSON line numbers.
+Databricks source exports use physical `.py` positions plus exported cell numbers.
 
 Exit codes: **0** = no findings or errors, **1** = findings (even with errors),
 **2** = errors only. A CI step fails on any enabled, unsuppressed **new** finding
@@ -157,7 +165,7 @@ Add the isolated-install hook to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: torchlight
 ```
