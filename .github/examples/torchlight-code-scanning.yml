@@ -1,4 +1,4 @@
-# Copy to .github/workflows/ in a repository using Torchlight v0.4.0+.
+# Copy to .github/workflows/ in a repository using Torchlight v0.5.0+ and Git 2.45+.
 name: Torchlight review
 
 on:
@@ -20,12 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Install Torchlight
-        run: python -m pip install torchlight-spark==0.4.0
+        run: python -m pip install torchlight-spark==0.5.0
       - name: Generate complete SARIF report
         id: scan
         shell: bash
@@ -41,6 +42,11 @@ jobs:
         with:
           sarif_file: torchlight.sarif
           category: torchlight
-      - name: Enforce project policy, including any reviewed baseline
-        if: ${{ !cancelled() && steps.scan.outcome == 'success' }}
+      - name: Enforce introduced findings on pull requests
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' && github.event_name == 'pull_request' }}
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: torchlight --changed-from "$BASE_COMMIT" --format github .
+      - name: Enforce project policy on pushes, including any reviewed baseline
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' && github.event_name != 'pull_request' }}
         run: torchlight --format github .

@@ -19,6 +19,9 @@ Analysis is local; source code is not sent to external APIs. Findings, JSON, and
 reports can include file paths and source snippets, so review reports for secrets
 or private code before publishing them.
 Baseline files omit source snippets, but still reveal project paths and rule IDs.
+Git comparison requires Git 2.45+, disables lazy fetching and execution helpers,
+and never checks out historical source. Use a patched Git; parsing and invoking
+Git on an untrusted repository are not a security sandbox.
 The optional SARIF schema check is development tooling; it downloads a pinned
 public schema, never uploads reports, and supports an offline local schema.
 

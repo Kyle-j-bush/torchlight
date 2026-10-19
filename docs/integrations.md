@@ -28,12 +28,12 @@ After setting up Python 3.12+ in your workflow:
 
 ```yaml
 - name: Install Torchlight
-  run: python -m pip install torchlight-spark==0.4.0
+  run: python -m pip install torchlight-spark==0.5.0
 - name: Review Spark code
   run: torchlight --format github jobs/ notebooks/
 ```
 
-Version 0.4.0 supports project configuration, baselines, SARIF, and four rules.
+Version 0.5.0 supports project configuration, baselines, Git comparison, SARIF, and four rules.
 Run from your project's root. Pin setup and checkout actions by full commit SHA in production
 workflows.
 
@@ -44,6 +44,12 @@ into your project's `.github/workflows/` directory. It uses SARIF 2.1.0 and
 `security-events: write`. It uploads a full `--no-baseline` report **before** a
 separate policy-enforcement scan fails on new findings. This preserves existing
 alert history without requiring all existing debt to pass CI.
+
+The example checks out full history. PR enforcement uses `--changed-from` with
+the PR base commit; push enforcement uses ordinary project/baseline policy.
+Comparison requires Git 2.45+ and ignores configured baselines. It reports only
+introduced findings; do not replace the full SARIF upload with that partial
+report. See [comparison semantics and errors](git-comparison.md).
 
 Do not let exit 1 skip the upload, or treat all nonzero exits as harmless.
 Scan errors mark the SARIF invocation unsuccessful, and still fail the workflow.
@@ -57,7 +63,7 @@ fingerprints, and limitations](reporting.md).
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.4.0
+    rev: v0.5.0
     hooks:
       - id: torchlight
 ```

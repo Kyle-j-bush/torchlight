@@ -16,9 +16,9 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-**v0.4.0** adds a public Python scanner API and evidence-backed single-partition
-write checks for `repartition(1)`. Shared configuration, fingerprints, baselines,
-and SARIF shipped in v0.3.0; v0.1.0 only matched method names.
+**v0.5.0** adds Git-base comparison for PR reviews through `--changed-from` and
+the Python API. The scanner API and `repartition(1)` rule shipped in v0.4.0;
+shared configuration, fingerprints, baselines, and SARIF shipped in v0.3.0.
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -143,8 +143,8 @@ annotations with cell locations in the message, not misleading JSON line numbers
 
 Exit codes: **0** = no findings or errors, **1** = findings (even with errors),
 **2** = errors only. A CI step fails on any enabled, unsuppressed **new** finding
-when a baseline is active, or all findings without one. Scan errors are never
-baselined. Snapshot writing has the separate contract described below.
+when a baseline or Git comparison is active, or all findings without either.
+Scan errors are never baselined. Snapshot writing has the separate contract below.
 
 For persistent Code Scanning history, upload a full SARIF report with
 `--no-baseline`, then enforce project policy separately. The
@@ -157,7 +157,7 @@ Add the isolated-install hook to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.4.0
+    rev: v0.5.0
     hooks:
       - id: torchlight
 ```
@@ -185,8 +185,20 @@ everything again.
 Fingerprints ignore formatting, comments, and line/cell insertions. Baselines
 match relative paths and occurrence counts, so additional identical calls are
 new. Renames and call edits can change identity. See [baseline limits and safe
-updates](docs/baselines.md). Git-base comparison (`--changed-from`) is **not
-implemented**; complete supplied files are still analyzed.
+updates](docs/baselines.md).
+
+### Review only findings introduced by a change
+
+```sh
+torchlight . --changed-from origin/main
+```
+
+Requires Git 2.45+ and full local history. Compares the merge base of the reference and
+HEAD against the working tree, including local edits and non-ignored untracked
+source. Complete changed files and notebooks are analyzed; existing findings are
+matched by structural identity and count, including Git-detected renames.
+Configured baselines are ignored. See [comparison behavior and CI setup](docs/git-comparison.md)
+for history errors, rename limits, and why full SARIF uploads remain necessary.
 
 ## Analysis boundaries
 

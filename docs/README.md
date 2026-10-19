@@ -10,6 +10,7 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Configuration](configuration.md): shared project policy and exact precedence.
 - [CI and pre-commit](integrations.md): use the same policy locally and in CI.
 - [Baselines](baselines.md): adopt with reviewed existing debt, fail only on new findings.
+- [Git comparison](git-comparison.md): review findings introduced since a PR's merge base.
 - [Report identity and SARIF](reporting.md): stable fingerprints and Code Scanning.
 - [Rule catalog](rules/README.md): examples, required evidence, and review guidance.
 - [Python API](python-api.md): immutable policy/reports and the shared scanner.
@@ -25,7 +26,7 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Synthetic regression corpus](../benchmarks/README.md).
 - [Contributing](../CONTRIBUTING.md) and [security](../SECURITY.md).
 
-These guides describe v0.4.0, including the initial pre-1.0 Python API. Spark-version
-targeting, Git-base comparison, and editor integrations remain future work. There
+These guides describe v0.5.0, including Git comparison and the pre-1.0 Python API. Spark-version
+targeting and editor integrations remain future work. There
 is no hosted documentation site yet; these Markdown guides are the initial information
 architecture. The real-world protocol is not a claim of measured accuracy.

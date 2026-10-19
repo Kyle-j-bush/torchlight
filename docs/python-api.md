@@ -37,7 +37,7 @@ The CLI retains its documented working-directory discovery.
 
 ## Scanning and reports
 
-- `Scanner(config).scan(paths, *, use_baseline=True)` accepts one string/`Path`
+- `Scanner(config).scan(paths, *, use_baseline=True, changed_from=None)` accepts one string/`Path`
   or an iterable of them, including generators. Relative inputs are relative to
   the **working directory at scan time**, not `Config.root`, matching the CLI.
 - Project root anchors excludes, baseline identity, and SARIF relative locations.
@@ -52,6 +52,13 @@ The CLI retains its documented working-directory discovery.
   before scanning. An empty input iterable is an error, not a clean scan.
 - `use_baseline=False` produces the full report without reading a configured
   baseline. Scanning never captures or modifies a baseline.
+- Since v0.5.0, `changed_from="origin/main"` reports introduced findings against
+  that reference's merge base with HEAD. It ignores the configured baseline
+  regardless of `use_baseline`. Git is located from `Config.root`, which must be
+  inside the repository. Inputs must belong to that repository. Current policy
+  applies to both snapshots; Git/history/source failures are report errors.
+  Invalid reference argument types or empty/NUL-containing strings raise
+  `TypeError`/`ValueError`. See [Git comparison](git-comparison.md) for limits.
 - Invalid API argument types raise `TypeError`/`ValueError`; configuration errors
   raise `ConfigError`. Do not treat an exception as a clean report.
 
