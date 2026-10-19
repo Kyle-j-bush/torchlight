@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -172,6 +173,22 @@ class PluginTests(unittest.TestCase):
             self.assertEqual(report.errors, ())
             self.assertEqual(len(report.findings), 0 if "ignore[" in source else 1)
 
+    def test_plugin_failure_is_file_local_and_preserves_other_files_findings(self):
+        class BrokenOnCount(CountDetector):
+            def check(self, facts):
+                if facts.method == "count":
+                    raise RuntimeError("private error")
+                return ()
+
+        other = self.root / "later.py"
+        other.write_text(SOURCE.replace("df.count()", "df.collect()"), encoding="utf-8")
+        config = Config(root=self.root, plugins=[Plugin(RULE, BrokenOnCount())])
+        report = Scanner(config).scan(self.root)
+        self.assertEqual([f.rule_id for f in report.findings], ["TL001"])
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn(str(self.path), report.errors[0])
+        self.assertNotIn("private error", report.errors[0])
+
     def test_plugin_baselines_are_strict_and_duplicate_aware(self):
         baseline = self.root / "debt.json"
         config = self.config(baseline=baseline)
@@ -202,6 +219,7 @@ class PluginTests(unittest.TestCase):
                 plain.render(output_format), extended.render(output_format)
             )
 
+    @unittest.skipUnless(shutil.which("git"), "Git is required for comparison tests")
     def test_git_comparison_uses_same_plugins_on_both_snapshots(self):
         for args in (
             ("init", "--template=", "-b", "main"),
@@ -223,3 +241,18 @@ class PluginTests(unittest.TestCase):
         report = scanner.scan(self.path, changed_from="HEAD")
         self.assertEqual(report.errors, ())
         self.assertEqual(len(report.findings), 1)
+
+        class BrokenOnCount(CountDetector):
+            def check(self, facts):
+                if facts.method == "count":
+                    raise RuntimeError("private base error")
+                return ()
+
+        self.path.write_text(
+            SOURCE.replace("df.count()", "df.collect()"), encoding="utf-8"
+        )
+        config = Config(root=self.root, plugins=[Plugin(RULE, BrokenOnCount())])
+        failed = Scanner(config).scan(self.path, changed_from="HEAD")
+        self.assertEqual([f.rule_id for f in failed.findings], ["TL001"])
+        self.assertIn("Git base", failed.errors[0])
+        self.assertNotIn("private base error", failed.errors[0])

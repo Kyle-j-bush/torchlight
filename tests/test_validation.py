@@ -180,6 +180,58 @@ class ValidationHarnessTests(unittest.TestCase):
         (self.corpus / "new.py").write_text("pass", encoding="utf-8")
         self.assertEqual(self.evaluate()[0].returncode, 2)
 
+    def test_source_symlinks_are_rejected_without_creating_outputs(self):
+        try:
+            (self.corpus / "alias.py").symlink_to(self.source)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        result = self.run_tool(
+            "snapshot",
+            self.corpus,
+            "--permission",
+            "fixture",
+            "--output",
+            self.work / "symlink-result",
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse((self.work / "symlink-result").exists())
+
+    def test_jupyter_and_databricks_audited_coordinates_match_real_findings(self):
+        (self.corpus / "job.ipynb").write_text(
+            json.dumps({"cells": [{"cell_type": "code", "source": SOURCE}]}),
+            encoding="utf-8",
+        )
+        (self.corpus / "export.py").write_text(
+            "# Databricks notebook source\n"
+            + SOURCE.rsplit("df.collect()", 1)[0]
+            + "# COMMAND ----------\n# MAGIC %python\n# MAGIC df.collect()\n",
+            encoding="utf-8",
+        )
+        other = self.work / "all-formats"
+        result = self.run_tool(
+            "snapshot", self.corpus, "--permission", "fixture", "--output", other
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.snapshot = other
+        self.labels = other / "labels.json"
+        self.write_labels(
+            [
+                self.site(),
+                self.site(path="job.ipynb", cell=1),
+                self.site(path="export.py", line=6, column=9, cell=2),
+            ]
+        )
+        labels = json.loads(self.labels.read_text())
+        labels["reviewed_files"].extend(["job.ipynb", "export.py"])
+        self.labels.write_text(json.dumps(labels), encoding="utf-8")
+        result, summary = self.evaluate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(summary["rules"]["TL001"]["tp"], 3)
+        self.assertEqual(summary["rules"]["TL001"]["unreviewed_emissions"], 0)
+        self.assertEqual(
+            summary["formats"], {"python": 1, "jupyter": 1, "databricks": 1}
+        )
+
     def test_scan_errors_remain_visible_and_do_not_inflate_metrics(self):
         self.source.write_text("? invalid", encoding="utf-8")
         other = self.work / "invalid-snapshot"

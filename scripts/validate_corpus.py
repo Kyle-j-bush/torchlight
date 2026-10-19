@@ -335,6 +335,7 @@ def evaluate(root: Path, manifest_path: Path, labels_path: Path, output: Path) -
                 for path in sorted(package.glob("*.py"))
             )
         ),
+        "runner_sha256": digest(Path(__file__).read_bytes()),
         "scanner_python": platform.python_version(),
         "platform": platform.platform(),
         "reviewer_count": labels["reviewer_count"],

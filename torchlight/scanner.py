@@ -14,7 +14,6 @@ from torchlight.diagnostics import Finding
 from torchlight.files import SOURCE_SUFFIXES, iter_source_files, scan_file, scan_source
 from torchlight.git import GitComparison, GitError
 from torchlight.identity import project_path
-from torchlight.plugins import PluginError
 from torchlight.reporting import render
 
 
@@ -208,7 +207,7 @@ class Scanner:
                         for f in file_findings
                         if f.rule_id in self.config.enabled_rules
                     )
-            except (OSError, ValueError, PluginError) as exc:
+            except (OSError, ValueError) as exc:
                 errors.append(f"{path}: {exc}")
 
         if baseline is not None:

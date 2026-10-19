@@ -11,7 +11,7 @@ from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
 from torchlight.databricks import HEADER, scan_databricks_source
 from torchlight.diagnostics import Finding
 from torchlight.notebooks import scan_notebook, scan_notebook_source
-from torchlight.plugins import Plugin
+from torchlight.plugins import Plugin, PluginError
 from torchlight.suppressions import apply_suppressions
 
 SOURCE_SUFFIXES = {".py", ".ipynb"}
@@ -96,9 +96,11 @@ def scan_file(
     plugins: tuple[Plugin, ...] = (),
 ) -> tuple[list[Finding], list[str]]:
     """Scan one source file, dispatching on its suffix."""
-    if path.suffix == ".ipynb":
-        return scan_notebook(path, assume_sessions=assume_sessions, plugins=plugins)
-    return scan_python(path, assume_sessions=assume_sessions, plugins=plugins)
+    scanner = scan_notebook if path.suffix == ".ipynb" else scan_python
+    try:
+        return scanner(path, assume_sessions=assume_sessions, plugins=plugins)
+    except PluginError as exc:
+        return [], [f"{path}: {exc}"]
 
 
 def scan_source(
@@ -111,7 +113,9 @@ def scan_source(
     """Analyze a Git blob, matching file decoding and universal newline handling."""
     try:
         text = source.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
-    except UnicodeError as exc:
+        scanner = (
+            scan_notebook_source if path.suffix == ".ipynb" else scan_python_source
+        )
+        return scanner(path, text, assume_sessions=assume_sessions, plugins=plugins)
+    except (UnicodeError, PluginError) as exc:
         return [], [f"{path}: {exc}"]
-    scanner = scan_notebook_source if path.suffix == ".ipynb" else scan_python_source
-    return scanner(path, text, assume_sessions=assume_sessions, plugins=plugins)
