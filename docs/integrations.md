@@ -19,8 +19,9 @@ scan errors. Successful `--write-baseline` capture exits 0; failed capture exits
 JSON uses `schema_version: 1`, with `findings` and `errors`; errors also go to
 stderr. Findings include rule ID, source coordinates, evidence, explanation,
 recommendation, snippet, and structural fingerprint. GitHub output escapes workflow-command characters.
-Notebook annotations are file-level, with code-cell coordinates in the message;
-they do not pretend cell lines are physical JSON lines.
+Jupyter annotations are file-level, with code-cell coordinates in the message;
+they do not pretend cell lines are physical JSON lines. Databricks `.py` exports
+use physical file annotations plus exported cell numbers.
 
 ## GitHub Actions
 
@@ -28,12 +29,13 @@ After setting up Python 3.12+ in your workflow:
 
 ```yaml
 - name: Install Torchlight
-  run: python -m pip install torchlight-spark==0.5.0
+  run: python -m pip install torchlight-spark==0.6.0
 - name: Review Spark code
   run: torchlight --format github jobs/ notebooks/
 ```
 
-Version 0.5.0 supports project configuration, baselines, Git comparison, SARIF, and four rules.
+Version 0.6.0 supports project configuration, baselines, Git comparison, SARIF,
+five rules, and Databricks Python source notebooks.
 Run from your project's root. Pin setup and checkout actions by full commit SHA in production
 workflows.
 
@@ -63,7 +65,7 @@ fingerprints, and limitations](reporting.md).
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: torchlight
 ```

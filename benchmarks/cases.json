@@ -218,6 +218,55 @@
       "description": "A reviewed small export can be suppressed with a specific reason.",
       "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    events.repartition(1).write.csv(output) # torchlight: ignore[TL004] -- small export required"],
       "expected": []
+    },
+    {
+      "name": "eager-local-iterator",
+      "description": "A built-in list retains every streamed Spark row locally.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    list(events.toLocalIterator())"],
+      "expected": [["TL005", 3, null]]
+    },
+    {
+      "name": "streamed-local-iterator",
+      "description": "Ordinary streaming iteration does not establish eager retention.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    for row in events.toLocalIterator():", "        consume(row)"],
+      "expected": []
+    },
+    {
+      "name": "bounded-local-iterator",
+      "description": "An explicit row bound remains recognized through a local iterator.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    tuple(events.limit(10).toLocalIterator())"],
+      "expected": []
+    },
+    {
+      "name": "shadowed-iterator-consumer",
+      "description": "A custom function named list does not prove eager consumption.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame, list):", "    list(events.toLocalIterator())"],
+      "expected": []
+    },
+    {
+      "name": "iterator-cross-cell-alias",
+      "description": "Known iterator provenance survives across notebook cells.",
+      "assume_sessions": ["spark"],
+      "cells": [["rows = spark.table('events').toLocalIterator()"], ["tuple(rows)"]],
+      "expected": [["TL005", 1, 2]]
+    },
+    {
+      "name": "iterator-after-expanding-join",
+      "description": "A join removes the row bound before eager iterator consumption.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame):", "    list(events.limit(10).join(other).toLocalIterator())"],
+      "expected": [["TL005", 3, null]]
+    },
+    {
+      "name": "databricks-eager-iterator",
+      "description": "Decoded Python source exports retain physical lines and exported cell numbers.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "df = SparkSession.builder.getOrCreate().table('events')", "# COMMAND ----------", "# MAGIC %python", "# MAGIC list(df.toLocalIterator())"],
+      "expected": [["TL005", 6, 2]]
+    },
+    {
+      "name": "databricks-opaque-boundary",
+      "description": "Opaque Databricks magic cells discard stale Python receiver evidence.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "df = SparkSession.builder.getOrCreate().table('events')", "# COMMAND ----------", "# MAGIC %run ./other", "# COMMAND ----------", "df.collect()"],
+      "expected": []
     }
   ]
 }

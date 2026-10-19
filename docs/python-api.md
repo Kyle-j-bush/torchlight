@@ -47,6 +47,10 @@ The CLI retains its documented working-directory discovery.
   baselines have the same behavior as the CLI.
 - Each call has fresh analysis state. A scanner can be reused; files do not share
   Spark state. Notebook cells within one file still share document-order state.
+- Since v0.6.0, Databricks-header `.py` files carry exported cell numbers with
+  physical file coordinates. `.ipynb` coordinates remain relative to code cells.
+  Do not assume every non-null `location.cell` implies a cell-relative line.
+  See [source mapping and opaque boundaries](databricks.md).
 - Invalid/unreadable source, missing/unsupported inputs, directory discovery
   failures, and invalid baselines are `report.errors`. An invalid baseline aborts
   before scanning. An empty input iterable is an error, not a clean scan.

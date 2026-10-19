@@ -221,9 +221,14 @@ class SparkAnalyzer(ast.NodeVisitor):
     def __init__(self, path: str, assume_sessions: tuple[str, ...] = ()):
         self.path = path
         self.state: dict[str, Value] = {
-            name: Value("session", f"Explicitly assumed SparkSession '{name}'")
-            for name in assume_sessions
+            name: Value("materializer", name) for name in ("list", "tuple")
         }
+        self.state.update(
+            {
+                name: Value("session", f"Explicitly assumed SparkSession '{name}'")
+                for name in assume_sessions
+            }
+        )
         self.source = ""
         self.lines: list[str] = []
         self.cell: int | None = None
@@ -237,8 +242,9 @@ class SparkAnalyzer(ast.NodeVisitor):
     def analyze(
         self, tree: ast.Module, source: str, cell: int | None = None
     ) -> list[Finding]:
+        if source is not self.source:
+            self.lines = source.splitlines()
         self.source, self.cell = source, cell
-        self.lines = source.splitlines()
         self.findings = []
         self.parents = {
             child: parent
@@ -376,10 +382,20 @@ class SparkAnalyzer(ast.NodeVisitor):
                 function = self._attribute(receiver, node.func.attr)
             else:
                 function = self._expr(node.func)
-            for argument in [*node.args, *(kw.value for kw in node.keywords)]:
+            arguments = [
                 self._expr(argument)
+                for argument in [*node.args, *(kw.value for kw in node.keywords)]
+            ]
             if function and function.kind == "session_type":
                 return Value("session", self._origin(node, "SparkSession constructor"))
+            if (
+                function
+                and function.kind == "materializer"
+                and len(node.args) == 1
+                and not node.keywords
+                and arguments[0] is not None
+            ):
+                return self._method(arguments[0], function.origin, node)
             if receiver is not None:
                 return self._method(receiver, node.func.attr, node)
             return None
@@ -515,6 +531,12 @@ class SparkAnalyzer(ast.NodeVisitor):
             return None
         if name in {"collect", "toPandas"}:
             return None
+        if name == "toLocalIterator":
+            return replace(
+                value,
+                kind="local_iterator",
+                origin=f"{value.origin}; {self._origin(node, 'Spark .toLocalIterator()')}",
+            )
         if name == "writeTo":
             return replace(value, kind="writer_v2")
         if name in {"groupBy", "groupby", "rollup", "cube"}:

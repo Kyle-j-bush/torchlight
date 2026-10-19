@@ -32,6 +32,7 @@ SOURCE = (
     "df.collect()\n"
     "df.coalesce(1).write.parquet('out')\n"
     "df.repartition(1).write.parquet('out')\n"
+    "list(df.toLocalIterator())\n"
     "for name in names:\n    df = df.withColumn(name, expr)\n"
 )
 
@@ -54,6 +55,12 @@ def main():
         Path("pyproject.toml").write_text("", encoding="utf-8")
         Path("job.py").write_text(SOURCE, encoding="utf-8")
         Path("clean.py").write_text("unknown.collect()", encoding="utf-8")
+        Path("export.py").write_text(
+            "# Databricks notebook source\n"
+            + SOURCE
+            + "# COMMAND ----------\n# MAGIC %python\n# MAGIC list(df.toLocalIterator())\n",
+            encoding="utf-8",
+        )
         Path("job.ipynb").write_text(
             json.dumps({"cells": [{"cell_type": "code", "source": SOURCE}]}),
             encoding="utf-8",
@@ -64,6 +71,7 @@ def main():
         for arguments in (
             ["job.py"],
             ["job.ipynb"],
+            ["export.py"],
             ["clean.py"],
             ["missing.py"],
             ["job.py", "missing.py"],
@@ -77,7 +85,7 @@ def main():
             ):
                 scan(["--format", "sarif", *arguments])
             validator.validate(json.loads(stdout.getvalue()))
-    print("7 SARIF report variants validated against the pinned OASIS 2.1.0 schema.")
+    print("8 SARIF report variants validated against the pinned OASIS 2.1.0 schema.")
 
 
 if __name__ == "__main__":

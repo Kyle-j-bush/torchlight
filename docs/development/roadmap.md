@@ -7,6 +7,8 @@ public Python API without weakening conservative Spark identity analysis.
 
 v0.5.0 adds Git-base comparison for review; the remaining analysis, notebook,
 integration, and independent validation work below is still open.
+v0.6.0 adds one further narrow rule, Databricks Python exports, and a documented
+Spark-version assessment—not a target-version configuration surface.
 
 ## Shipped in v0.3.0
 
@@ -35,10 +37,19 @@ integration, and independent validation work below is still open.
   helpers disabled, baseline isolation, and installed comparison verification.
 - A PR policy-enforcement example retaining complete SARIF uploads separately.
 
+## Shipped in v0.6.0
+
+- TL005 for proven eager list/tuple consumption of known unbounded Spark local
+  iterators; streaming alone is not a finding. Eight new synthetic cases in total.
+- Databricks Python source notebooks with token-aware boundaries, opaque-cell
+  invalidation, physical source/cell mapping, and shared Git/baseline/API behavior.
+- [Spark 3.3–3.5/Connect assessment](spark-versions.md); version targeting remains
+  deferred until concrete advice justifies its runtime/vendor policy surface.
+
 ## Next: analysis and review contracts
 
-1. Evaluate Spark-version targeting against documented API differences before
-   adding version-dependent advice. Vendor-specific behavior needs explicit limits.
+1. Revisit Spark-version targeting only for a demonstrated version-dependent rule,
+   using the assessment above and explicit classic/Connect/vendor limits.
 2. Exercise the internal detector boundary on further independently justified
    rules before considering a public plugin API. Preserve CLI/JSON/fingerprint
    compatibility and avoid exposing analyzer state.
@@ -47,7 +58,8 @@ integration, and independent validation work below is still open.
 
 ## Notebook and integration work
 
-- Databricks source-format notebooks with tested cell/source mapping and opaque boundaries.
+- Extend source-notebook coverage only against documented formats and real demand;
+  Scala/R/SQL/DBC and vendor runtime semantics are not currently supported.
 - Better notebook cell navigation where supported; retain document-order semantics.
 - Editor protocol/LSP research after a stable library or subprocess interface exists.
 - GitLab/reviewdog adapters; keep integrations separate from the dependency-free core.
@@ -70,4 +82,4 @@ integration, and independent validation work below is still open.
 A 1.0 decision should be gated on stable interfaces, reproducible real-world
 quality evidence, and dependable CI ergonomics—not a target rule count. The
 synthetic corpus is regression coverage, not production accuracy. No external
-review, benchmark, performance, or broad-roadmap completion is implied by v0.5.0.
+review, benchmark, performance, or broad-roadmap completion is implied by v0.6.0.

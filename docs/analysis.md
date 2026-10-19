@@ -17,7 +17,7 @@ bound. Joins, unions, generators, and other recognized expanding operations can
 discard it. A row bound does **not** establish memory safety: row width and driver
 memory are unknown, and even a very large literal bound is still a bound.
 
-## Notebook state
+## Jupyter notebook state
 
 One analyzer processes code cells in **document order**, not historical kernel
 execution order. Spark identities, aliases, bounds, and partition evidence can
@@ -31,8 +31,22 @@ the cell is skipped and previous state is discarded. Parse errors also discard
 state, produce errors, and allow later cells to be scanned afresh.
 
 Torchlight does not load `%run` targets or reconstruct interactive execution.
-Databricks source-format notebook parsing is not yet supported; ordinary `.py`
-exports are treated as Python, without special source-notebook magic semantics.
+
+## Databricks Python source exports
+
+Since v0.6.0, `.py` files with the first-line Databricks header use token-aware
+cell and magic parsing. Exported cells share state until an opaque cell or parse
+error invalidates it. Their cell numbers count all exported cells, and their
+coordinates are physical file positions, including `# MAGIC` prefixes. Ordinary
+`.py` files without the header are unchanged. See [format boundaries](databricks.md).
+
+## Eager local iteration
+
+TL005 proves `list()`/`tuple()` consumption of a known Spark local iterator; it
+does not treat streaming itself as full driver collection. Known built-in and
+iterator aliases propagate, while rebinding and opaque cells discard evidence.
+Exhaustion, runtime monkey-patching, comprehensions, and custom consumers are
+not modeled. See [TL005](rules/TL005.md).
 
 ## Interpretation
 

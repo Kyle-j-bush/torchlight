@@ -14,19 +14,22 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Report identity and SARIF](reporting.md): stable fingerprints and Code Scanning.
 - [Rule catalog](rules/README.md): examples, required evidence, and review guidance.
 - [Python API](python-api.md): immutable policy/reports and the shared scanner.
+- [Databricks source notebooks](databricks.md): cells, magic boundaries, and physical source mapping.
 - [Analysis boundaries and notebook behavior](analysis.md): what the scanner can
   and cannot establish.
 
 ## Project and validation
 
 - [Python compatibility assessment](development/python-compatibility.md).
+- [Spark-version assessment](development/spark-versions.md): upstream API/Connect differences, not runtime certification.
 - [Follow-up roadmap](development/roadmap.md).
 - [Internal detector contributor guide](development/detectors.md).
 - [Real-world benchmark protocol](../benchmarks/real-world-protocol.md).
 - [Synthetic regression corpus](../benchmarks/README.md).
 - [Contributing](../CONTRIBUTING.md) and [security](../SECURITY.md).
 
-These guides describe v0.5.0, including Git comparison and the pre-1.0 Python API. Spark-version
-targeting and editor integrations remain future work. There
+These guides describe v0.6.0, including five rules, Databricks Python exports,
+Git comparison, and the pre-1.0 Python API. Spark-version targeting flags and
+editor integrations remain future work. There
 is no hosted documentation site yet; these Markdown guides are the initial information
 architecture. The real-world protocol is not a claim of measured accuracy.

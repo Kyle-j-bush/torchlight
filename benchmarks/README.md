@@ -1,8 +1,10 @@
 # Labeled regression corpus
 
-`cases.json` contains 36 synthetic, labeled Python and notebook cases. Each case
+`cases.json` contains 44 synthetic, labeled Python and notebook cases. Each case
 states its purpose and expected `(rule ID, line, code-cell number)` findings.
-Python cases use `null` for the cell number. Fixtures are parsed, never executed.
+Ordinary Python cases use `null` for the cell number. Databricks source exports
+use physical file lines and exported cell numbers; Jupyter uses code-cell-local
+lines and code-cell numbers. Fixtures are parsed, never executed.
 
 Run the corpus separately:
 
