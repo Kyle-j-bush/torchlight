@@ -532,7 +532,11 @@ class SparkAnalyzer(ast.NodeVisitor):
         if name in {"collect", "toPandas"}:
             return None
         if name == "toLocalIterator":
-            return replace(value, kind="local_iterator")
+            return replace(
+                value,
+                kind="local_iterator",
+                origin=f"{value.origin}; {self._origin(node, 'Spark .toLocalIterator()')}",
+            )
         if name == "writeTo":
             return replace(value, kind="writer_v2")
         if name in {"groupBy", "groupby", "rollup", "cube"}:

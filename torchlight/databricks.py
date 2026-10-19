@@ -22,9 +22,15 @@ def scan_databricks_source(
 ) -> tuple[list[Finding], list[str]]:
     lines = source.splitlines(keepends=True)
     comments = {}
+    strings = 0
     try:
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
-            if token.type == tokenize.COMMENT and token.start[1] == 0:
+            kind = tokenize.tok_name[token.type]
+            if kind in {"FSTRING_START", "TSTRING_START"}:
+                strings += 1
+            elif kind in {"FSTRING_END", "TSTRING_END"}:
+                strings -= 1
+            elif not strings and token.type == tokenize.COMMENT and token.start[1] == 0:
                 comments[token.start[0]] = token.string.rstrip()
     except (tokenize.TokenError, IndentationError) as exc:
         # Without reliable tokens, markers inside a multiline string are ambiguous.

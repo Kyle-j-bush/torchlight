@@ -38,6 +38,7 @@ class LocalIteratorTests(unittest.TestCase):
                 self.assertIn(
                     "Annotated as pyspark.sql.DataFrame", findings[0].evidence[0]
                 )
+                self.assertIn("Spark .toLocalIterator() (line", findings[0].evidence[0])
 
     def test_streaming_bounded_unknown_and_invalid_consumers_are_not_reported(self):
         for body in (

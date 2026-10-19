@@ -123,6 +123,15 @@ class DatabricksTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIsNone(findings[0].location.cell)
 
+    def test_markers_in_fstring_expressions_are_not_export_directives(self):
+        report = self.scan(
+            SETUP
+            + 'text = f"""{(\n# COMMAND ----------\n# MAGIC %run other\ndf.collect()\n)}"""\n'
+        )
+        self.assertEqual(report.errors, ())
+        self.assertEqual(len(report.findings), 1)
+        self.assertEqual(report.findings[0].location.cell, 1)
+
     def test_suppressions_are_cell_local_and_use_decoded_python_comments(self):
         report = self.scan(
             SETUP,
@@ -152,6 +161,20 @@ class DatabricksTests(unittest.TestCase):
         data = ("\ufeff" + source.replace("\n", "\r\n")).encode("utf-8")
         self.path.write_bytes(data)
         self.assertEqual(scan_file(self.path), scan_source(self.path, data))
+
+    def test_sarif_source_kind_uses_the_scanned_name_before_symlink_resolution(self):
+        target = self.root / "source.txt"
+        target.write_text(self.source(SETUP, "df.collect()\n"), encoding="utf-8")
+        try:
+            self.path.symlink_to(target)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        report = Scanner(Config(root=self.root)).scan(self.path)
+        self.assertEqual(report.errors, ())
+        result = json.loads(report.render("sarif"))["runs"][0]["results"][0]
+        physical = result["locations"][0]["physicalLocation"]
+        self.assertEqual(physical["artifactLocation"]["uri"], "source.txt")
+        self.assertEqual(physical["region"]["startLine"], 5)
 
     def test_decoded_source_and_shell_escapes_are_never_executed(self):
         marker = self.root / "executed"
