@@ -1,6 +1,6 @@
 # Labeled regression corpus
 
-`cases.json` contains 36 synthetic, labeled Python and notebook cases. Each case
+`cases.json` contains 42 synthetic, labeled Python and notebook cases. Each case
 states its purpose and expected `(rule ID, line, code-cell number)` findings.
 Python cases use `null` for the cell number. Fixtures are parsed, never executed.
 

@@ -51,6 +51,16 @@ RULES = {
         "suitable parallelism; do not automatically replace repartition with coalesce, "
         "which has different execution behavior.",
     ),
+    "TL005": Rule(
+        "TL005",
+        "Potential driver-memory risk from eager local iteration",
+        "toLocalIterator() streams rows, but wrapping it in list() or tuple() retains "
+        "all consumed rows in local Python memory. This defeats streaming's memory "
+        "advantage; whether it fits depends on result size, row width, and available memory.",
+        "Consume rows incrementally without retaining the entire result, or keep "
+        "the computation distributed. Limit rows only if partial data is intended; "
+        "otherwise verify the full local result's memory footprint.",
+    ),
 }
 
 

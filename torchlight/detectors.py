@@ -102,9 +102,30 @@ class RepartitionedWrite:
             )
 
 
+class EagerLocalIterator:
+    rule_id = "TL005"
+
+    def check(self, facts: CallFacts) -> Iterable[Diagnostic]:
+        value = facts.receiver
+        if (
+            value.kind == "local_iterator"
+            and facts.method in {"list", "tuple"}
+            and value.row_limit is None
+        ):
+            yield Diagnostic(
+                self.rule_id,
+                (
+                    value.origin,
+                    f"Built-in {facts.method}() consumes a known Spark toLocalIterator(); no explicit row limit recognized.",
+                ),
+                f" via {facts.method}()",
+            )
+
+
 DETECTORS: tuple[Detector, ...] = (
     UnboundedMaterialization(),
     CoalescedWrite(),
     LoopCarriedProjection(),
     RepartitionedWrite(),
+    EagerLocalIterator(),
 )
