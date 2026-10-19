@@ -185,6 +185,23 @@ class PluginTests(unittest.TestCase):
         self.path.write_text(SOURCE + "df.count()\n", encoding="utf-8")
         self.assertEqual(len(scanner.scan(self.path).findings), 1)
 
+    def test_plugin_registration_preserves_all_builtin_outputs(self):
+        self.path.write_text(
+            SOURCE
+            + "df.collect()\nlist(df.toLocalIterator())\ndf.coalesce(1).write.parquet('out')\ndf.repartition(1).write.parquet('out')\nfor name in names:\n    df = df.withColumn(name, expr)\n",
+            encoding="utf-8",
+        )
+        plain = Scanner(Config(root=self.root)).scan(self.path)
+        extended = Scanner(self.config(ignore={RULE.code})).scan(self.path)
+        self.assertEqual(
+            {f.rule_id for f in plain.findings},
+            {"TL001", "TL002", "TL003", "TL004", "TL005"},
+        )
+        for output_format in ("text", "json", "github", "sarif"):
+            self.assertEqual(
+                plain.render(output_format), extended.render(output_format)
+            )
+
     def test_git_comparison_uses_same_plugins_on_both_snapshots(self):
         for args in (
             ("init", "--template=", "-b", "main"),

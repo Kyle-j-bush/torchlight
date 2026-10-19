@@ -18,7 +18,9 @@ from urllib.request import urlopen
 
 from jsonschema import Draft4Validator
 
+from torchlight import Config, Rule, Scanner
 from torchlight.cli import main as scan
+from torchlight.plugins import Diagnostic, Plugin
 
 SCHEMA_URL = (
     "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/"
@@ -35,6 +37,14 @@ SOURCE = (
     "list(df.toLocalIterator())\n"
     "for name in names:\n    df = df.withColumn(name, expr)\n"
 )
+
+
+class SchemaDetector:
+    rule_id = "SCHEMA001"
+
+    def check(self, facts):
+        if facts.receiver.kind == "frame" and facts.method == "collect":
+            yield Diagnostic(self.rule_id, (facts.receiver.origin,))
 
 
 def main():
@@ -85,7 +95,16 @@ def main():
             ):
                 scan(["--format", "sarif", *arguments])
             validator.validate(json.loads(stdout.getvalue()))
-    print("8 SARIF report variants validated against the pinned OASIS 2.1.0 schema.")
+        plugin = Plugin(
+            Rule("SCHEMA001", "Schema test", "Test policy.", "Review."),
+            SchemaDetector(),
+        )
+        validator.validate(
+            json.loads(
+                Scanner(Config(plugins=(plugin,))).scan("job.py").render("sarif")
+            )
+        )
+    print("9 SARIF report variants validated against the pinned OASIS 2.1.0 schema.")
 
 
 if __name__ == "__main__":

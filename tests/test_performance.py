@@ -24,8 +24,10 @@ class PerformanceHarnessTests(unittest.TestCase):
             self.assertIn("Files: 3", result.stdout)
             self.assertIn("Findings per scan: 18", result.stdout)
             self.assertIn("Samples: 5", result.stdout)
+
         def hashes(text):
             return [line for line in text.splitlines() if "SHA-256:" in line]
+
         self.assertEqual(hashes(first.stdout), hashes(second.stdout))
         for flag in ("--files", "--cells", "--samples"):
             self.assertEqual(self.run_benchmark(flag, "0").returncode, 2)
