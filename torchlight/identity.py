@@ -44,8 +44,8 @@ def _syntax(value):
     return [type(value).__name__, repr(value)]
 
 
-def call_key(node: ast.Call, parents: dict[ast.AST, ast.AST]) -> str:
-    """Keep call syntax and named lexical scopes, but not line/cell numbers."""
+def call_key(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> str:
+    """Keep syntax and named lexical scopes, but not line/cell numbers."""
     scopes = []
     parent = parents.get(node)
     while parent is not None:

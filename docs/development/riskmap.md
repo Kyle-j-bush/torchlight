@@ -1,11 +1,11 @@
 # RiskMap implementation contract
 
-Status: internal foundations only, not a shipped feature. Slices 01–03 add
+Status: internal foundations only, not a shipped feature. Slices 01–04 add
 preservation tests, stacked-review CI, and an immutable graph model with a bounded
-collector, plus private tracked analyzer state. Scanners do not import or allocate
-the graph model yet. Trace capture, public graph APIs, and HTML/graph-JSON formats
-are still planned; they are not available in v0.8.0. No release version changes
-until release readiness.
+collector, private tracked analyzer state, and opt-in internal linear trace capture.
+Ordinary scans do not allocate graph records. Control-flow capture, notebook
+plumbing, public graph APIs, and HTML/graph-JSON formats are still planned; they
+are not available in v0.8.0. No release version changes until release readiness.
 
 ## Product boundary
 
@@ -117,8 +117,8 @@ checks unique IDs and anchors, valid endpoints/artifacts, and no cross-file edge
 Tests use standard-library dataclass serialization for reproducibility; this is
 not the public graph-JSON schema, which is introduced in slice 09.
 
-The file-scoped `_GraphCollector` accepts structural call keys from its eventual
-caller. It hashes those keys with node roles instead of retaining raw AST text.
+The file-scoped `_GraphCollector` accepts structural keys from the analyzer.
+It hashes those keys with node roles instead of retaining raw AST text.
 Matching keys omit artifact paths; node IDs include artifact identity and an
 occurrence suffix. Coordinates, labels, and facts do not change those IDs.
 Document traversal determines occurrence order. Parent references are sorted and
@@ -152,6 +152,35 @@ distinct endpoints become `None` until slice 05 introduces explicit alternative
 nodes. Unknown results still lose identity without clearing known receiver
 bindings. `forget()` clears both facts and private endpoints between opaque cells.
 Default-scan timing is recorded in [the performance log](../../benchmarks/performance.md).
+
+### Linear trace capture (slice 04)
+
+Only internal callers can opt in by passing `_collector` to `SparkAnalyzer`.
+The existing traversal records session/read and annotation-backed sources,
+receiver transforms, explicit limit/partition operations, writer setup/options,
+actions, and eager list/tuple consumption of local iterators. Aliases share their
+existing endpoint; deriving a new value never changes an independent binding.
+Safe actions and writes are captured even when no finding fires. A recognized
+scalar action such as `count()` does not gain a tracked return type.
+
+Semantic method inference remains in one place. The collector snapshots its
+existing before/after facts; it never parses origin/evidence strings or infers
+new bounds. Partition-method metadata is absent when partition evidence is
+absent. Clearing that evidence is not proof of multiple partitions; a row bound
+is not a memory guarantee. Joins, unions, and subtraction have receiver edges
+only, with an explicit label that other inputs are untracked. Labels use operation
+names, not source arguments or reconstructed paths. Structural keys reuse the
+existing syntax/scope machinery, now also accepting attributes and annotations;
+fingerprint version 1 is unchanged.
+
+Each emitted diagnostic gets a pre-policy operation anchor, including plugins
+and last-diagnostic-wins collisions. Capture limits never drop findings or change
+plugin facts/errors. Unsupported frame receiver methods/attributes produce opaque
+endpoints without granting identity to their result. Missing prior endpoints are
+labeled rather than connected to a guessed path. Full free-call/control-flow
+boundaries and alternatives/loop context remain later work; TL003 can currently
+anchor to its transform but has no loop-summary node. Notebook invalidation,
+scanner filtering, report-local finding IDs, and public rendering remain deferred.
 
 ### Scanner integration and comparison
 

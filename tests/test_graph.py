@@ -341,7 +341,13 @@ class GraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "job.py"
             path.write_text(
-                "from pyspark.sql import DataFrame\ndef job(df: DataFrame):\n    df.collect()\n",
+                "from pyspark.sql import SparkSession, DataFrame\n"
+                "df = SparkSession.builder.getOrCreate().table('events')\n"
+                "df.collect()\nlist(df.toLocalIterator())\n"
+                "df.coalesce(1).write.mode('overwrite').parquet('out')\n"
+                "df.repartition(1).writeTo('target').create()\n"
+                "for column in columns:\n    df = df.withColumn(column, expr)\n"
+                "def job(events: DataFrame):\n    events.collect()\n",
                 encoding="utf-8",
             )
             with contextlib.ExitStack() as stack:
@@ -366,4 +372,7 @@ class GraphTests(unittest.TestCase):
                     )
                 report = Scanner().scan(path)
             self.assertEqual(report.errors, ())
-            self.assertEqual([f.rule_id for f in report.findings], ["TL001"])
+            self.assertEqual(
+                [f.rule_id for f in report.findings],
+                ["TL001", "TL005", "TL002", "TL004", "TL003", "TL001"],
+            )

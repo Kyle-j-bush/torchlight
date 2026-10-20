@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from torchlight.detectors import DETECTORS
 from torchlight.diagnostics import RULES, Finding, Location
 from torchlight.facts import CallFacts, Value
+from torchlight.graph import GraphFacts, NodeKind, _GraphCollector
 from torchlight.identity import call_key
 from torchlight.plugins import Plugin
 
@@ -123,6 +124,21 @@ V2_WRITE_METHODS = {
     "overwritePartitions",
     "replace",
 }
+# Graph roles only; recognizing an action does not infer its return value.
+FRAME_ACTIONS = {
+    "collect",
+    "count",
+    "first",
+    "foreach",
+    "foreachPartition",
+    "head",
+    "isEmpty",
+    "show",
+    "tail",
+    "take",
+    "toLocalIterator",
+    "toPandas",
+}
 GENERATORS = {
     "explode",
     "explode_outer",
@@ -220,6 +236,17 @@ class _TrackedValue:
     trace: str | None = None
 
 
+def _graph_facts(value: Value | None) -> GraphFacts | None:
+    if value is None:
+        return None
+    return GraphFacts(
+        value.kind,
+        value.row_limit,
+        value.single_partition,
+        value.single_partition_method if value.single_partition is not None else None,
+    )
+
+
 class SparkAnalyzer(ast.NodeVisitor):
     """Track known Spark values within a file or notebook, in document order.
 
@@ -233,8 +260,10 @@ class SparkAnalyzer(ast.NodeVisitor):
         assume_sessions: tuple[str, ...] = (),
         *,
         plugins: tuple[Plugin, ...] = (),
+        _collector: _GraphCollector | None = None,
     ):
         self.path = path
+        self._collector = _collector
         self.detectors = (*DETECTORS, *plugins)
         self.rules = {**RULES, **{plugin.rule.code: plugin.rule for plugin in plugins}}
         self.state: dict[str, _TrackedValue] = {
@@ -290,6 +319,32 @@ class SparkAnalyzer(ast.NodeVisitor):
 
     def _origin(self, node: ast.AST, description: str) -> str:
         return f"{description} ({self._location(node).describe()})"
+
+    def _trace(
+        self,
+        node: ast.AST,
+        kind: NodeKind,
+        label: str,
+        before: _TrackedValue | None,
+        after: Value | None,
+    ) -> str | None:
+        if self._collector is None:
+            return None
+        parents = ()
+        if before is not None:
+            if before.trace is not None:
+                parents = ((before.trace, "receiver"),)
+            elif kind != "source":
+                label += "; prior trace unavailable"
+        return self._collector.add_node(
+            kind,
+            label,
+            structural_key=call_key(node, self.parents),
+            location=self._location(node),
+            parents=parents,
+            before=_graph_facts(before.value if before is not None else None),
+            after=_graph_facts(after),
+        )
 
     def _emit(self, code: str, node: ast.Call, evidence: tuple[str, ...], detail=""):
         message = self.rules[code].title + detail
@@ -404,7 +459,25 @@ class SparkAnalyzer(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             return self.state.get(node.id)
         if isinstance(node, ast.Attribute):
-            return self._attribute(self._expr(node.value), node.attr)
+            receiver = self._expr(node.value)
+            result = self._attribute(receiver, node.attr)
+            if (
+                self._collector is not None
+                and receiver is not None
+                and receiver.value.kind == "frame"
+            ):
+                trace = self._trace(
+                    node,
+                    "transform" if result is not None else "opaque",
+                    f".{node.attr}"
+                    if result is not None
+                    else f".{node.attr}; attribute result not tracked",
+                    receiver,
+                    result.value if result is not None else None,
+                )
+                if result is not None:
+                    result = _TrackedValue(result.value, trace)
+            return result
         if isinstance(node, ast.Call):
             receiver = None
             if isinstance(node.func, ast.Attribute):
@@ -417,8 +490,12 @@ class SparkAnalyzer(ast.NodeVisitor):
                 for argument in [*node.args, *(kw.value for kw in node.keywords)]
             ]
             if function and function.value.kind == "session_type":
+                value = Value("session", self._origin(node, "SparkSession constructor"))
                 return _TrackedValue(
-                    Value("session", self._origin(node, "SparkSession constructor"))
+                    value,
+                    self._trace(
+                        node, "source", "SparkSession constructor", None, value
+                    ),
                 )
             if (
                 function
@@ -430,6 +507,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 return self._method(arguments[0], function.value.origin, node)
             if receiver is not None:
                 return self._method(receiver, node.func.attr, node)
+            # shortcut: free calls lack boundary nodes, add with slice 05 opacity capture.
             return None
         if isinstance(node, ast.NamedExpr):
             previous = self.assignment_targets
@@ -509,11 +587,81 @@ class SparkAnalyzer(ast.NodeVisitor):
                 for target in self.assignment_targets
             ),
         )
+        start = len(self.findings)
         for detector in self.detectors:
             for diagnostic in detector.check(facts):
                 self._emit(
                     diagnostic.rule_id, node, diagnostic.evidence, diagnostic.detail
                 )
+        result = self._method_result(tracked, name, node)
+        if self._collector is not None:
+            emitted = self.findings[start:]
+            trace = self._trace_call(node, facts, tracked, result, bool(emitted))
+            for finding in emitted:
+                self._collector.anchor(finding.rule_id, finding.location, trace)
+            if result is not None:
+                result = _TrackedValue(result.value, trace)
+        return result
+
+    def _trace_call(
+        self,
+        node: ast.Call,
+        facts: CallFacts,
+        tracked: _TrackedValue,
+        result: _TrackedValue | None,
+        has_findings: bool,
+    ) -> str | None:
+        value, name = facts.receiver, facts.method
+        label = f".{name}()"
+        if result is not None and (
+            value.kind in {"session", "reader"}
+            and result.value.kind == "frame"
+            or value.kind in {"builder", "session_type"}
+            and result.value.kind == "session"
+        ):
+            kind = "source"
+            label = (
+                "Spark reader" if value.kind == "reader" else "SparkSession"
+            ) + f" {label}"
+        elif facts.terminal_write:
+            kind = "sink"
+        elif value.kind == "frame" and name in FRAME_ACTIONS:
+            kind = "action"
+        elif value.kind == "local_iterator" and name in {"list", "tuple"}:
+            kind = "action"
+            label = f"Built-in {name}(); eager iterator materialization"
+        elif (
+            value.kind in {"frame", "grouped", "frame_na", "writer", "writer_v2"}
+            or has_findings
+        ):
+            kind = "transform" if result is not None else "opaque"
+            if result is not None and name in {
+                "limit",
+                "coalesce",
+                "repartition",
+                "repartitionByRange",
+            }:
+                kind = "constraint"
+            if result is None:
+                label += "; return value not tracked"
+        else:
+            return result.trace if result is not None else None
+        if value.kind == "frame" and name in {
+            "join",
+            "union",
+            "unionAll",
+            "unionByName",
+            "subtract",
+        }:
+            label += "; receiver path only; other inputs untracked"
+        return self._trace(
+            node, kind, label, tracked, result.value if result is not None else None
+        )
+
+    def _method_result(
+        self, tracked: _TrackedValue, name: str, node: ast.Call
+    ) -> _TrackedValue | None:
+        value = tracked.value
         if value.kind == "builder":
             if name in {"getOrCreate", "create"}:
                 return _TrackedValue(
@@ -691,8 +839,18 @@ class SparkAnalyzer(ast.NodeVisitor):
         if tracked and tracked.value.kind in {"frame_type", "session_type"}:
             value = tracked.value
             kind = "frame" if value.kind == "frame_type" else "session"
+            value = Value(kind, self._origin(node, f"Annotated as {value.origin}"))
             return _TrackedValue(
-                Value(kind, self._origin(node, f"Annotated as {value.origin}"))
+                value,
+                self._trace(
+                    node,
+                    "source",
+                    "Annotated DataFrame (not a traced read)"
+                    if kind == "frame"
+                    else "Annotated SparkSession",
+                    None,
+                    value,
+                ),
             )
         return None
 
