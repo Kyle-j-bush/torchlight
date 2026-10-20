@@ -96,6 +96,10 @@ The [local pilot runner](benchmarks/local-validation.md) keeps private manifests
 labels and raw reports outside this checkout. Do not commit donated source or
 pilot artifacts. [Synthetic timings](benchmarks/performance.md) are reproducible
 observations, not CI speed thresholds or production performance claims.
+Pilot labels must declare `human` or `agent` provenance; agent-assisted labels are
+not independent human judgments. New `pipeline-` regression expectations carry
+reviewable rationales. See the [public-example rehearsal](docs/development/public-corpus-rehearsal.md)
+for aggregate-only reporting and why an all-negative audit cannot establish recall.
 
 To exercise the repository's hook manifest, install pre-commit in a development
 environment, then run:

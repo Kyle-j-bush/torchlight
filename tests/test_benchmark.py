@@ -22,6 +22,9 @@ class LabeledRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             for index, case in enumerate(document["cases"]):
                 with self.subTest(case=case["name"]):
+                    if "rationale" in case:
+                        self.assertIsInstance(case["rationale"], str)
+                        self.assertTrue(case["rationale"].strip())
                     notebook = "cells" in case
                     path = (
                         Path(directory)

@@ -267,6 +267,174 @@
       "description": "Opaque Databricks magic cells discard stale Python receiver evidence.",
       "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "df = SparkSession.builder.getOrCreate().table('events')", "# COMMAND ----------", "# MAGIC %run ./other", "# COMMAND ----------", "df.collect()"],
       "expected": []
+    },
+    {
+      "name": "pipeline-helper-return-boundary",
+      "description": "A daily-load helper returns a DataFrame that local analysis cannot resolve.",
+      "rationale": "The caller is not analyzed interprocedurally. No finding is the current analysis boundary, not a claim that the full collection is safe.",
+      "source": ["from pyspark.sql import SparkSession", "def load_events(session, day):", "    return session.read.format('delta').load('events').filter(day)", "spark = SparkSession.builder.getOrCreate()", "events = load_events(spark, day)", "events.collect()"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-annotated-plot-helper",
+      "description": "An annotated plotting helper converts its entire filtered input to Pandas.",
+      "rationale": "The imported DataFrame annotation proves the receiver. Filtering does not establish a row bound; plotting intent does not remove local-memory review.",
+      "source": ["from pyspark.sql import DataFrame", "def plot_events(events: DataFrame):", "    local = events.filter('active = true').toPandas()", "    return local.plot()"],
+      "expected": [["TL001", 3, null]]
+    },
+    {
+      "name": "pipeline-delta-distributed-export",
+      "description": "A Delta reader and format-configured writer keep the work distributed.",
+      "rationale": "Known reader/writer chains alone are not risks. No local materialization or proven single-partition terminal write occurs.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').option('versionAsOf', 3).load('events')", "events.filter('active = true').write.format('delta').mode('overwrite').save('active')"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-delta-filtered-collection",
+      "description": "A filtered Delta read is still collected without an explicit bound.",
+      "rationale": "The format/load chain establishes Spark identity, while a predicate alone says nothing about the maximum local result size.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').load('events').filter('active = true')", "payload = events.select('id', 'payload').collect()"],
+      "expected": [["TL001", 4, null]]
+    },
+    {
+      "name": "pipeline-daily-collection-loop",
+      "description": "Each loop iteration reads and collects one date partition.",
+      "rationale": "A fresh input avoids loop-carried projection growth, but partition selection does not bound the number of collected rows. Only TL001 is expected.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "for day in days:", "    batch = spark.read.parquet('events/' + day)", "    rows = batch.collect()", "    deliver(rows)"],
+      "expected": [["TL001", 5, null]]
+    },
+    {
+      "name": "pipeline-union-of-bounded-inputs",
+      "description": "A union discards the analyzer's existing bound, even when each input has a limit.",
+      "rationale": "Torchlight does not currently add bounds across union inputs. The conservative warning is expected policy, not proof that this mathematically finite result is unsafe.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "recent = spark.table('recent').limit(10)", "archive = spark.table('archive').limit(10)", "recent.unionByName(archive).collect()"],
+      "expected": [["TL001", 5, null]]
+    },
+    {
+      "name": "pipeline-union-with-final-preview-limit",
+      "description": "A final preview limit restores a recognized bound after union.",
+      "rationale": "The explicit limit applies to the combined result; this is recognized bounded materialization, without guaranteeing memory safety for wide rows.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "recent = spark.table('recent').limit(10)", "archive = spark.table('archive').limit(10)", "recent.unionByName(archive).limit(20).toPandas()"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-small-delta-coalesce-export",
+      "description": "An intentional bounded single-partition export still receives qualified write review.",
+      "rationale": "TL002 tracks write parallelism, not result row bounds. A small export can be intentional without silently disabling the rule.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "preview = spark.table('events').limit(100)", "single = preview.coalesce(1)", "single.write.format('delta').mode('overwrite').save('preview')"],
+      "expected": [["TL002", 5, null]]
+    },
+    {
+      "name": "pipeline-reviewed-small-delta-export",
+      "description": "A reasoned suppression records the reviewed single-partition requirement.",
+      "rationale": "The exact terminal-write rule is suppressed with a reason; this tests policy scope rather than declaring every small write safe.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "preview = spark.table('events').limit(100)", "single = preview.coalesce(1)", "single.write.format('delta').mode('overwrite').save('preview') # torchlight: ignore[TL002] -- reviewed bounded demonstration export"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-delta-writer-alias-repartition",
+      "description": "A shuffled single partition reaches a terminal save through a writer alias.",
+      "rationale": "Writer format/mode options and a local alias preserve proven repartition(1) provenance, so TL004 attaches to save().",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').load('events')", "writer = events.repartition(1).write.format('delta').mode('append')", "writer.save('archive')"],
+      "expected": [["TL004", 5, null]]
+    },
+    {
+      "name": "pipeline-restored-export-parallelism",
+      "description": "A later repartition restores recognized output parallelism before saving.",
+      "rationale": "The terminal write no longer has proven single-partition provenance. This does not certify optimal partition sizing.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').load('events')", "events.coalesce(1).repartition(16).write.format('delta').save('archive')"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-loop-generated-enrichment",
+      "description": "An enrichment helper accumulates withColumn projections through a configurable loop.",
+      "rationale": "The annotated frame is assigned back to the same loop-carried name without resetting its identity; TL003 asks for a plan-growth review.",
+      "source": ["from pyspark.sql import DataFrame", "def enrich(events: DataFrame, expressions):", "    for name in expressions:", "        events = events.withColumn(name, expressions[name])", "    return events"],
+      "expected": [["TL003", 4, null]]
+    },
+    {
+      "name": "pipeline-single-select-enrichment",
+      "description": "A helper constructs one projection rather than loop-carried withColumn assignments.",
+      "rationale": "Constructing expression objects in a comprehension is not the supported repeated DataFrame-projection pattern; dependency correctness still needs human review.",
+      "source": ["from pyspark.sql import DataFrame", "def enrich(events: DataFrame, expressions):", "    additions = [expressions[name].alias(name) for name in expressions]", "    return events.select('*', *additions)"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-one-off-column",
+      "description": "A single normalization projection does not imply plan growth.",
+      "rationale": "withColumn is a legitimate API; TL003 requires evidence that the assignment carries a frame through a repeated loop.",
+      "source": ["from pyspark.sql import DataFrame", "def normalize(events: DataFrame, expression):", "    events = events.withColumn('normalized', expression)", "    return events"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-monitor-count-and-show",
+      "description": "A monitoring helper counts a DataFrame and prints a preview.",
+      "rationale": "count() and show() are not any of the five current review patterns. No finding is not a promise that these Spark actions are cheap.",
+      "source": ["from pyspark.sql import DataFrame", "def monitor(events: DataFrame):", "    total = events.count()", "    events.show(20, truncate=False)", "    return total"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-explicit-preview-payload",
+      "description": "A small caller-selected preview is projected and collected.",
+      "rationale": "A literal bound survives non-expanding projection/filter operations; runtime row width is still unknown.",
+      "source": ["from pyspark.sql import DataFrame", "def preview(events: DataFrame):", "    sample = events.limit(25).select('id', 'payload').filter('id IS NOT NULL')", "    return sample.collect()"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-eager-iterator-delivery",
+      "description": "An iterator alias is eagerly retained before delivery.",
+      "rationale": "Built-in list() consumes the known unbounded Spark iterator; aliasing does not make local retention incremental.",
+      "source": ["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.table('events').filter('active = true')", "rows = events.toLocalIterator()", "payload = list(rows)", "deliver(payload)"],
+      "expected": [["TL005", 5, null]]
+    },
+    {
+      "name": "pipeline-incremental-iterator-delivery",
+      "description": "A helper consumes each streamed row without proven whole-result retention.",
+      "rationale": "Bare iteration is not eager container construction. The opaque delivery function could still retain rows; TL005 does not model that behavior.",
+      "source": ["from pyspark.sql import DataFrame", "def deliver_events(events: DataFrame):", "    for row in events.toLocalIterator():", "        deliver_one(row)"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-custom-list-consumer",
+      "description": "A parameter shadows the built-in list consumer in an export helper.",
+      "rationale": "A custom callable named list does not prove eager retention. Losing built-in identity avoids a name-only diagnostic.",
+      "source": ["from pyspark.sql import DataFrame", "def export(events: DataFrame, list):", "    return list(events.toLocalIterator())"],
+      "expected": []
+    },
+    {
+      "name": "pipeline-notebook-delta-export",
+      "description": "A Delta notebook prepares its single-partition writer in an earlier cell.",
+      "rationale": "Document-order state preserves the writer alias and repartition provenance; the terminal save in the second code cell receives TL004.",
+      "cells": [["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').load('events')", "writer = events.repartition(1).write.format('delta')"], ["writer.mode('overwrite').save('export')"]],
+      "expected": [["TL004", 1, 2]]
+    },
+    {
+      "name": "pipeline-notebook-bounded-chart",
+      "description": "A notebook carries a bounded chart input into a later Pandas conversion.",
+      "rationale": "The explicit row bound survives the cell boundary. The case tests inference, not a guarantee that every 100-row chart fits memory.",
+      "cells": [["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "chart = spark.table('events').limit(100)"], ["local = chart.toPandas()", "local.plot()"]],
+      "expected": []
+    },
+    {
+      "name": "pipeline-notebook-opaque-setup",
+      "description": "An opaque notebook dependency loader invalidates earlier Spark identities.",
+      "rationale": "Torchlight does not execute or inspect %run targets. No finding after that boundary records missing evidence, not safe runtime behavior.",
+      "cells": [["from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.table('events')"], ["%run ./configure_pipeline"], ["events.toPandas()"]],
+      "expected": []
+    },
+    {
+      "name": "pipeline-databricks-python-delivery",
+      "description": "An exported Databricks Python cell eagerly retains a prior Delta input.",
+      "rationale": "Decoded Python shares prior cell state; TL005 uses the exported cell number and physical file line, not decoded cell-local coordinates.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.read.format('delta').load('events')", "# COMMAND ----------", "# MAGIC %python", "# MAGIC rows = list(events.toLocalIterator())"],
+      "expected": [["TL005", 7, 2]]
+    },
+    {
+      "name": "pipeline-databricks-opaque-sql",
+      "description": "An exported SQL cell invalidates earlier Python receiver knowledge.",
+      "rationale": "SQL contents remain opaque and unexecuted. Conservative invalidation prevents relying on stale Python state after the language boundary.",
+      "source": ["# Databricks notebook source", "from pyspark.sql import SparkSession", "spark = SparkSession.builder.getOrCreate()", "events = spark.table('events')", "# COMMAND ----------", "# MAGIC %sql", "# MAGIC SELECT * FROM events", "# COMMAND ----------", "events.collect()"],
+      "expected": []
     }
   ]
 }

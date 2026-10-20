@@ -1,8 +1,10 @@
-# Real-world validation protocol — draft 2
+# Real-world validation protocol — draft 3
 
-**Status:** protocol and local pilot tooling, October 18, 2026. No real-world corpus has been collected
-or independently labeled, and no production accuracy figures are claimed. The
-existing [44 synthetic cases](README.md) remain regression coverage, not benchmark
+**Status:** protocol and local pilot tooling, October 19, 2026. An
+[agent-labeled public-example rehearsal](../docs/development/public-corpus-rehearsal.md)
+is documented, but no independently human-labeled production corpus or production
+accuracy figures are claimed. The
+existing [68 synthetic cases](README.md) remain regression coverage, not benchmark
 evidence. Do not execute any submitted source or notebook cells.
 
 ## Research questions
@@ -51,6 +53,10 @@ seeing Torchlight output**. Enumerate candidate sites for all five rules,
 including intentional uses, non-Spark lookalikes, and sites the scanner cannot
 currently resolve. This independent inventory is needed for recall; labeling only
 emitted warnings can measure precision but cannot establish recall.
+Record labeler provenance explicitly. The local runner requires `labeler: human`
+or `labeler: agent`; mixed/agent-assisted labels count as agent provenance. It
+withholds reviewer agreement unless two human reviewers are declared. Agent-only
+public-code rehearsals exercise tooling but do not satisfy this independent audit.
 
 For each site, record:
 

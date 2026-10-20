@@ -11,6 +11,8 @@ v0.6.0 adds one further narrow rule, Databricks Python exports, and a documented
 Spark-version assessment—not a target-version configuration surface.
 v0.7.0 adds explicit detector plugins, synthetic scan timing, and private local
 validation tools. The permissioned-corpus evaluation itself is still blocked on data.
+v0.8.0 adds realistic-pattern regression proposals, labeler provenance, and a
+public-example rehearsal. Independent human-labeled production evaluation is open.
 
 ## Shipped in v0.3.0
 
@@ -58,6 +60,18 @@ validation tools. The permissioned-corpus evaluation itself is still blocked on 
   blank blind labels, per-rule counts, and optional two-reviewer decision agreement.
   No real corpus/labels have been supplied; this is not completed accuracy validation.
 
+## Shipped in v0.8.0
+
+- 24 additional agent-authored pipeline-shaped cases (68 total), with rationale
+  for positive/negative expectations, including conservative inference limits.
+- Explicit human/agent provenance in pilot labels/summaries; missing provenance
+  fails and agent review cannot produce human-agreement statistics.
+- A [complete Apache Spark example rehearsal](public-corpus-rehearsal.md), pinned
+  to 147 Python files at v3.5.1 and audited before scanning. One agent-judged false
+  positive; zero positive labels mean recall is not estimable. No detector changes.
+- No independent human review, production corpus, or production accuracy claims;
+  public source, per-file labels and raw findings are not redistributed.
+
 ## Next: analysis and review contracts
 
 1. Revisit Spark-version targeting only for a demonstrated version-dependent rule,
@@ -96,4 +110,4 @@ A 1.0 decision should be gated on stable interfaces, reproducible real-world
 quality evidence, and dependable CI ergonomics—not a target rule count. The
 synthetic corpus is regression coverage, not production accuracy. No external
 review, real-world benchmark, production performance, or broad-roadmap completion
-is implied by v0.7.0.
+is implied by v0.8.0. The public-example rehearsal is workflow evidence only.

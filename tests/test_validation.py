@@ -41,11 +41,12 @@ class ValidationHarnessTests(unittest.TestCase):
             text=True,
         )
 
-    def write_labels(self, sites=None, reviewers=1):
+    def write_labels(self, sites=None, reviewers=1, labeler="agent"):
         labels = json.loads(self.labels.read_text())
         labels.update(
             blind_review=True,
             reviewer_count=reviewers,
+            labeler=labeler,
             reviewed_files=["private-job.py"],
             sites=sites if sites is not None else [self.site()],
         )
@@ -91,6 +92,7 @@ class ValidationHarnessTests(unittest.TestCase):
         template = json.loads(self.labels.read_text())
         self.assertEqual(template["sites"], [])
         self.assertFalse(template["blind_review"])
+        self.assertIsNone(template["labeler"])
         self.write_labels()
         before = self.source.read_bytes()
         result, summary = self.evaluate()
@@ -101,6 +103,7 @@ class ValidationHarnessTests(unittest.TestCase):
         self.assertEqual((rule["tp"], rule["fp"], rule["fn"]), (1, 0, 0))
         self.assertEqual((rule["precision"], rule["recall"]), (1, 1))
         self.assertIsNone(rule["initial_agreement"])
+        self.assertEqual(summary["labeler"], "agent")
         self.assertIsNone(summary["rules"]["TL005"]["recall"])
         serialized = json.dumps(summary)
         for private in (
@@ -137,6 +140,7 @@ class ValidationHarnessTests(unittest.TestCase):
                 self.site(rule_id="TL005", b="surface"),
             ],
             reviewers=2,
+            labeler="human",
         )
         result, summary = self.evaluate()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -147,6 +151,39 @@ class ValidationHarnessTests(unittest.TestCase):
         )
         self.assertEqual(summary["rules"]["TL005"]["fn"], 1)
         self.assertEqual(summary["rules"]["TL005"]["initial_agreement"]["fraction"], 1)
+
+    def test_agent_agreement_is_withheld_even_with_two_matching_reviewers(self):
+        self.write_labels([self.site(b="surface")], reviewers=2, labeler="agent")
+        result, summary = self.evaluate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(summary["labeler"], "agent")
+        self.assertEqual(summary["reviewer_count"], 2)
+        self.assertEqual(summary["rules"]["TL001"]["tp"], 1)
+        self.assertTrue(
+            all(rule["initial_agreement"] is None for rule in summary["rules"].values())
+        )
+        self.assertTrue(
+            any(
+                "not independent human validation" in limit
+                for limit in summary["limits"]
+            )
+        )
+
+    def test_missing_or_invalid_labeler_is_not_silently_assumed_human(self):
+        self.write_labels()
+        labels = json.loads(self.labels.read_text())
+        for value in (None, True, [], "unknown", "human,agent"):
+            with self.subTest(value=value):
+                self.labels.write_text(
+                    json.dumps({**labels, "labeler": value}), encoding="utf-8"
+                )
+                result, summary = self.evaluate()
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("explicit provenance", result.stderr)
+                self.assertIsNone(summary)
+        labels.pop("labeler")
+        self.labels.write_text(json.dumps(labels), encoding="utf-8")
+        self.assertEqual(self.evaluate()[0].returncode, 2)
 
     def test_unreviewed_files_wrong_manifest_duplicates_and_malformed_labels_fail(self):
         for sites, reviewers in (
