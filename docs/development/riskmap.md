@@ -1,10 +1,11 @@
 # RiskMap implementation contract
 
-Status: internal foundations only, not a shipped feature. Slices 01–02 add
+Status: internal foundations only, not a shipped feature. Slices 01–03 add
 preservation tests, stacked-review CI, and an immutable graph model with a bounded
-collector. Scanners do not import or allocate the graph model yet. Analyzer
-instrumentation, public graph APIs, and HTML/graph-JSON formats are still planned;
-they are not available in v0.8.0. No release version changes until release readiness.
+collector, plus private tracked analyzer state. Scanners do not import or allocate
+the graph model yet. Trace capture, public graph APIs, and HTML/graph-JSON formats
+are still planned; they are not available in v0.8.0. No release version changes
+until release readiness.
 
 ## Product boundary
 
@@ -136,6 +137,22 @@ trace anchors can explicitly hold `None`. Scanner filtering, fallback evidence,
 and report-local finding IDs remain slice 07 work. No configuration knob or
 graph allocation is added to ordinary scans in this slice.
 
+### Tracked state (slice 03)
+
+`SparkAnalyzer` now keeps immutable `_TrackedValue(value, trace)` pairs in its
+private state and expression results, including imports, annotations, aliases,
+attributes, scope snapshots, and loop tagging. `trace` is an optional node ID;
+ordinary scans keep it `None`, and this slice creates no graph records. Detectors
+and version-1 plugins still receive the original plain `Value` inside `CallFacts`.
+
+Merges compare semantic values, never wrapper equality. Existing bounds,
+single-partition evidence, origins, and loop-token rules stay unchanged even
+when equal facts carry different trace endpoints. Shared endpoints survive;
+distinct endpoints become `None` until slice 05 introduces explicit alternative
+nodes. Unknown results still lose identity without clearing known receiver
+bindings. `forget()` clears both facts and private endpoints between opaque cells.
+Default-scan timing is recorded in [the performance log](../../benchmarks/performance.md).
+
 ### Scanner integration and comparison
 
 Resolve finding links after suppressions, rule selection, baseline matching, and
@@ -246,11 +263,13 @@ Both CI and CodeQL run for those base branches as well as `main`; push triggers
 remain restricted to `main`. Required-check names, permissions, action pins,
 and main/release protections are unchanged. Never use `pull_request_target`.
 
-Local Git history must retain a separate commit boundary for each slice. Set
-`branch.<branch>.gh-merge-base` to its predecessor (`main` for slice 01), and use
-explicit `gh pr create --base <predecessor> --head <branch>` when publication is
-authorized. The standard GitHub CLI supports this stack; no additional service
-is needed. Do not use its dry-run mode as a no-push safeguard: it may still push.
+Local Git history must retain a separate commit boundary for each slice. Use the
+`github/gh-stack` extension to track the dependency chain: `gh stack init` adopts
+existing branches bottom-up, `gh stack add riskmap/<next-slice>` adds a child, and
+`gh stack view --short` checks its position. `gh stack push` pushes branches;
+`gh stack submit` also creates or updates PRs and the GitHub-side stack. Neither
+command is authorized by local stack creation alone. Do not substitute manual
+`gh pr create` calls for the stack workflow or use dry-run as a no-push safeguard.
 
 Final merges always go to `main`, bottom-up, using the existing squash policy.
 Do not merge children into feature branches or introduce an integration branch.

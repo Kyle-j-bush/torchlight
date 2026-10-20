@@ -59,3 +59,49 @@ speed threshold or a comparison with the earlier observation. Later RiskMap
 measurements must rerun the baseline under matching conditions rather than use
 these elapsed times as a CI gate. Rendering, cold-cache behavior, and peak memory
 were not measured; no production performance or accuracy claim follows.
+
+## RiskMap tracked-state observation (2026-10-20)
+
+Slice 03 reran the pre-RiskMap commit above from a temporary archive, then the
+tracked-state analyzer, using the same CPython 3.14.8 interpreter, platform,
+300-file/eight-block corpus, and harness. Each run discarded one warm-up and
+verified 7,200 findings per scan. Graph capture was disabled; no graph records
+were allocated. No other Torchlight checks ran concurrently, but unrelated
+processes were using CPU on this uncontrolled developer machine.
+
+- Baseline tool digest: `0dab5bd2807271fc158b7b06ab2db574d14c991ee78bb24de44f9e1677293bf3`.
+- Tracked-state tool digest: `6bb0ad19ebc896100531612648efbeb77530aeef71fea60d6e1f9b0499deee4f`.
+- Shared corpus digest: `cbba51e93175bcec0cec8812ad481da39704c3794e1df96a3401f5277c49f3be`.
+
+Runs are listed in execution order. The first four used the default command;
+after a noisy tracked run, the final three used `--samples 15`, bracketing the
+tracked run with baseline runs instead of treating the old timing as a threshold.
+All samples, including the outliers, are retained below.
+
+| Run | Samples | Median seconds | Range seconds |
+| --- | --- | --- | --- |
+| Baseline A | 5 | 0.224350 | 0.217532–0.239840 |
+| Tracked A | 5 | 0.224472 | 0.219561–0.250373 |
+| Baseline B | 5 | 0.219683 | 0.212971–0.222604 |
+| Tracked B | 5 | 0.329877 | 0.240746–0.566033 |
+| Baseline C | 15 | 0.228988 | 0.219727–0.293650 |
+| Tracked C | 15 | 0.232387 | 0.224488–0.240637 |
+| Baseline D | 15 | 0.235905 | 0.219402–0.345240 |
+
+```text
+Baseline A: 0.239840, 0.225728, 0.221554, 0.224350, 0.217532
+Tracked A:  0.232742, 0.224472, 0.219781, 0.219561, 0.250373
+Baseline B: 0.215720, 0.222604, 0.219683, 0.219718, 0.212971
+Tracked B:  0.329877, 0.566033, 0.527884, 0.328338, 0.240746
+Baseline C: 0.237675, 0.224617, 0.220159, 0.219727, 0.221327, 0.222655, 0.221012, 0.242569, 0.255187, 0.293650, 0.278369, 0.237628, 0.229778, 0.220873, 0.228988
+Tracked C:  0.233630, 0.228685, 0.227500, 0.224488, 0.232387, 0.240637, 0.233026, 0.230224, 0.233777, 0.228580, 0.230358, 0.225968, 0.233334, 0.238243, 0.233319
+Baseline D: 0.219402, 0.234259, 0.231186, 0.227898, 0.222403, 0.238280, 0.242488, 0.246075, 0.262196, 0.231457, 0.242945, 0.231706, 0.235905, 0.266085, 0.345240
+```
+
+The final tracked median falls between the bracketing baseline medians, about
+1.5% above the first and 1.5% below the second. The overlapping ranges and
+transient spikes in both implementations do not establish a sustained default
+scan regression, nor do they isolate the wrapper's allocation cost. Repeat on
+quiet hardware before making performance claims. This remains warm-cache,
+synthetic scan timing, not a CI gate; rendering, cold caches, peak memory,
+graph-enabled overhead, and production performance were not measured.

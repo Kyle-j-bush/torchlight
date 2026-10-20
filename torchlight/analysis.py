@@ -4,7 +4,7 @@
 """Conservative, local Spark DataFrame analysis without importing or executing Spark."""
 
 import ast
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from torchlight.detectors import DETECTORS
 from torchlight.diagnostics import RULES, Finding, Location
@@ -212,6 +212,14 @@ def integer_argument(node: ast.Call, keyword: str) -> int | None:
     return literal_integer(argument) if argument is not None else None
 
 
+@dataclass(frozen=True, slots=True)
+class _TrackedValue:
+    """Keep private trace endpoints separate from plugin-visible semantic facts."""
+
+    value: Value
+    trace: str | None = None
+
+
 class SparkAnalyzer(ast.NodeVisitor):
     """Track known Spark values within a file or notebook, in document order.
 
@@ -229,12 +237,15 @@ class SparkAnalyzer(ast.NodeVisitor):
         self.path = path
         self.detectors = (*DETECTORS, *plugins)
         self.rules = {**RULES, **{plugin.rule.code: plugin.rule for plugin in plugins}}
-        self.state: dict[str, Value] = {
-            name: Value("materializer", name) for name in ("list", "tuple")
+        self.state: dict[str, _TrackedValue] = {
+            name: _TrackedValue(Value("materializer", name))
+            for name in ("list", "tuple")
         }
         self.state.update(
             {
-                name: Value("session", f"Explicitly assumed SparkSession '{name}'")
+                name: _TrackedValue(
+                    Value("session", f"Explicitly assumed SparkSession '{name}'")
+                )
                 for name in assume_sessions
             }
         )
@@ -245,7 +256,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         self.loop_ids: list[int] = []
         self.next_loop_id = 0
         self.assignment_targets: set[str] = set()
-        self.class_globals: dict[str, Value] | None = None
+        self.class_globals: dict[str, _TrackedValue] | None = None
         self.parents: dict[ast.AST, ast.AST] = {}
 
     def analyze(
@@ -307,7 +318,7 @@ class SparkAnalyzer(ast.NodeVisitor):
             if isinstance(statement, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
                 break
 
-    def _bind(self, target: ast.expr, value: Value | None = None) -> None:
+    def _bind(self, target: ast.expr, value: _TrackedValue | None = None) -> None:
         if isinstance(target, ast.Name):
             if value is None:
                 self.state.pop(target.id, None)
@@ -325,7 +336,11 @@ class SparkAnalyzer(ast.NodeVisitor):
         for alias in node.names:
             name = alias.asname or alias.name.split(".")[0]
             module = alias.name if alias.asname else alias.name.split(".")[0]
-            value = Value("module", module) if module.startswith("pyspark") else None
+            value = (
+                _TrackedValue(Value("module", module))
+                if module.startswith("pyspark")
+                else None
+            )
             self._bind(ast.Name(id=name), value)
 
     def visit_ImportFrom(self, node):
@@ -335,28 +350,33 @@ class SparkAnalyzer(ast.NodeVisitor):
                 continue
             value = None
             if not node.level and node.module and node.module.startswith("pyspark"):
-                value = self._attribute(Value("module", node.module), alias.name)
+                value = self._attribute(
+                    _TrackedValue(Value("module", node.module)), alias.name
+                )
             self._bind(ast.Name(id=alias.asname or alias.name), value)
 
-    def _attribute(self, value: Value | None, name: str) -> Value | None:
-        if value is None:
+    def _attribute(
+        self, tracked: _TrackedValue | None, name: str
+    ) -> _TrackedValue | None:
+        if tracked is None:
             return None
+        value = tracked.value
         if value.kind == "module":
             symbol = f"{value.origin}.{name}"
             if value.origin == "pyspark.sql.functions" and name in GENERATORS:
-                return Value("generator", symbol)
+                return _TrackedValue(Value("generator", symbol))
             if symbol in {
                 "pyspark.sql.SparkSession",
                 "pyspark.sql.session.SparkSession",
                 "pyspark.sql.connect.session.SparkSession",
             }:
-                return Value("session_type", symbol)
+                return _TrackedValue(Value("session_type", symbol))
             if symbol in {
                 "pyspark.sql.DataFrame",
                 "pyspark.sql.dataframe.DataFrame",
                 "pyspark.sql.connect.dataframe.DataFrame",
             }:
-                return Value("frame_type", symbol)
+                return _TrackedValue(Value("frame_type", symbol))
             if symbol in {
                 "pyspark.sql",
                 "pyspark.sql.session",
@@ -366,19 +386,19 @@ class SparkAnalyzer(ast.NodeVisitor):
                 "pyspark.sql.connect.session",
                 "pyspark.sql.connect.dataframe",
             }:
-                return Value("module", symbol)
+                return _TrackedValue(Value("module", symbol))
         if value.kind == "session_type" and name == "builder":
-            return Value("builder", value.origin)
+            return _TrackedValue(Value("builder", value.origin), tracked.trace)
         if value.kind == "session" and name in {"read", "readStream"}:
-            return Value("reader", value.origin)
+            return _TrackedValue(Value("reader", value.origin), tracked.trace)
         if value.kind == "frame":
             if name == "write":
-                return replace(value, kind="writer")
+                return _TrackedValue(replace(value, kind="writer"), tracked.trace)
             if name == "na":
-                return replace(value, kind="frame_na")
+                return _TrackedValue(replace(value, kind="frame_na"), tracked.trace)
         return None
 
-    def _expr(self, node: ast.expr | None) -> Value | None:
+    def _expr(self, node: ast.expr | None) -> _TrackedValue | None:
         if node is None:
             return None
         if isinstance(node, ast.Name):
@@ -396,16 +416,18 @@ class SparkAnalyzer(ast.NodeVisitor):
                 self._expr(argument)
                 for argument in [*node.args, *(kw.value for kw in node.keywords)]
             ]
-            if function and function.kind == "session_type":
-                return Value("session", self._origin(node, "SparkSession constructor"))
+            if function and function.value.kind == "session_type":
+                return _TrackedValue(
+                    Value("session", self._origin(node, "SparkSession constructor"))
+                )
             if (
                 function
-                and function.kind == "materializer"
+                and function.value.kind == "materializer"
                 and len(node.args) == 1
                 and not node.keywords
                 and arguments[0] is not None
             ):
-                return self._method(arguments[0], function.origin, node)
+                return self._method(arguments[0], function.value.origin, node)
             if receiver is not None:
                 return self._method(receiver, node.func.attr, node)
             return None
@@ -472,7 +494,10 @@ class SparkAnalyzer(ast.NodeVisitor):
             self.visit(child)
         return None
 
-    def _method(self, value: Value, name: str, node: ast.Call) -> Value | None:
+    def _method(
+        self, tracked: _TrackedValue, name: str, node: ast.Call
+    ) -> _TrackedValue | None:
+        value = tracked.value
         facts = CallFacts(
             receiver=value,
             method=name,
@@ -491,29 +516,37 @@ class SparkAnalyzer(ast.NodeVisitor):
                 )
         if value.kind == "builder":
             if name in {"getOrCreate", "create"}:
-                return Value("session", self._origin(node, "SparkSession builder"))
+                return _TrackedValue(
+                    Value("session", self._origin(node, "SparkSession builder"))
+                )
             if name in {"appName", "config", "enableHiveSupport", "master", "remote"}:
-                return value
+                return tracked
         if value.kind == "session_type" and name in {
             "getActiveSession",
             "getDefaultSession",
         }:
-            return Value("session", self._origin(node, "SparkSession lookup"))
+            return _TrackedValue(
+                Value("session", self._origin(node, "SparkSession lookup"))
+            )
         if value.kind == "session":
             if name in {"createDataFrame", "range", "sql", "table"}:
                 origin = self._origin(node, f"SparkSession.{name}()")
-                return Value("frame", f"{origin}; session: {value.origin}")
+                return _TrackedValue(
+                    Value("frame", f"{origin}; session: {value.origin}")
+                )
             if name == "newSession":
-                return value
+                return tracked
         if value.kind == "reader":
             if name in READ_METHODS:
                 origin = self._origin(node, f"Spark reader .{name}()")
-                return Value("frame", f"{origin}; session: {value.origin}")
+                return _TrackedValue(
+                    Value("frame", f"{origin}; session: {value.origin}")
+                )
             if name in {"format", "option", "options", "schema"}:
-                return value
+                return tracked
         if value.kind == "writer":
             if name in WRITE_OPTIONS:
-                return value
+                return tracked
         if value.kind == "writer_v2":
             if name in {
                 "using",
@@ -523,7 +556,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                 "clusterBy",
                 "tableProperty",
             }:
-                return value
+                return tracked
         if value.kind == "grouped" and name in {
             "agg",
             "avg",
@@ -534,25 +567,37 @@ class SparkAnalyzer(ast.NodeVisitor):
             "pivot",
             "sum",
         }:
-            return value if name == "pivot" else replace(value, kind="frame")
+            return (
+                tracked
+                if name == "pivot"
+                else _TrackedValue(replace(value, kind="frame"), tracked.trace)
+            )
         if value.kind == "frame_na" and name in {"drop", "fill", "replace"}:
-            return replace(value, kind="frame")
+            return _TrackedValue(replace(value, kind="frame"), tracked.trace)
         if value.kind != "frame":
             return None
         if name in {"collect", "toPandas"}:
             return None
         if name == "toLocalIterator":
-            return replace(
-                value,
-                kind="local_iterator",
-                origin=f"{value.origin}; {self._origin(node, 'Spark .toLocalIterator()')}",
+            return _TrackedValue(
+                replace(
+                    value,
+                    kind="local_iterator",
+                    origin=f"{value.origin}; {self._origin(node, 'Spark .toLocalIterator()')}",
+                ),
+                tracked.trace,
             )
         if name == "writeTo":
-            return replace(value, kind="writer_v2")
+            return _TrackedValue(replace(value, kind="writer_v2"), tracked.trace)
         if name in {"groupBy", "groupby", "rollup", "cube"}:
-            return replace(value, kind="grouped", row_limit=None, single_partition=None)
+            return _TrackedValue(
+                replace(value, kind="grouped", row_limit=None, single_partition=None),
+                tracked.trace,
+            )
         if name == "agg":
-            return replace(value, row_limit=1, single_partition=None)
+            return _TrackedValue(
+                replace(value, row_limit=1, single_partition=None), tracked.trace
+            )
         if name not in FRAME_METHODS:
             return None
         bound, single = value.row_limit, value.single_partition
@@ -585,11 +630,14 @@ class SparkAnalyzer(ast.NodeVisitor):
             if integer_argument(node, "numPartitions") == 1:
                 single = self._location(node)
                 partition_method = "coalesce"
-        return replace(
-            value,
-            row_limit=bound,
-            single_partition=single,
-            single_partition_method=partition_method,
+        return _TrackedValue(
+            replace(
+                value,
+                row_limit=bound,
+                single_partition=single,
+                single_partition_method=partition_method,
+            ),
+            tracked.trace,
         )
 
     def _has_generator(self, node: ast.Call) -> bool:
@@ -603,7 +651,7 @@ class SparkAnalyzer(ast.NodeVisitor):
                     )
                     alias = self.state.get(name)
                     if name in GENERATORS or (
-                        alias is not None and alias.kind == "generator"
+                        alias is not None and alias.value.kind == "generator"
                     ):
                         return True
         return False
@@ -618,14 +666,16 @@ class SparkAnalyzer(ast.NodeVisitor):
         for target in node.targets:
             self._bind(target, value)
 
-    def _annotation(self, annotation: ast.expr | None, node: ast.AST) -> Value | None:
+    def _annotation(
+        self, annotation: ast.expr | None, node: ast.AST
+    ) -> _TrackedValue | None:
         if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
             try:
                 annotation = ast.parse(annotation.value, mode="eval").body
             except SyntaxError:
                 return None
         if isinstance(annotation, ast.Name):
-            value = self.state.get(annotation.id)
+            tracked = self.state.get(annotation.id)
         elif isinstance(annotation, ast.Attribute):
 
             def resolve(item):
@@ -635,12 +685,15 @@ class SparkAnalyzer(ast.NodeVisitor):
                     return self._attribute(resolve(item.value), item.attr)
                 return None
 
-            value = resolve(annotation)
+            tracked = resolve(annotation)
         else:
             return None
-        if value and value.kind in {"frame_type", "session_type"}:
+        if tracked and tracked.value.kind in {"frame_type", "session_type"}:
+            value = tracked.value
             kind = "frame" if value.kind == "frame_type" else "session"
-            return Value(kind, self._origin(node, f"Annotated as {value.origin}"))
+            return _TrackedValue(
+                Value(kind, self._origin(node, f"Annotated as {value.origin}"))
+            )
         return None
 
     def visit_AnnAssign(self, node):
@@ -664,29 +717,37 @@ class SparkAnalyzer(ast.NodeVisitor):
         self._bind(node.name)
 
     @staticmethod
-    def _merge_value(left: Value | None, right: Value | None) -> Value | None:
-        if left is None or right is None or left.kind != right.kind:
+    def _merge_value(
+        left: _TrackedValue | None, right: _TrackedValue | None
+    ) -> _TrackedValue | None:
+        if left is None or right is None or left.value.kind != right.value.kind:
             return None
+        # shortcut: distinct traces have no endpoint until slice 05 adds merge nodes.
+        trace = left.trace if left.trace == right.trace else None
+        left, right = left.value, right.value
         if left.kind not in {"frame", "grouped", "writer", "writer_v2", "frame_na"}:
-            return left if left == right else None
+            return _TrackedValue(left, trace) if left == right else None
         bound = None
         if left.row_limit is not None and right.row_limit is not None:
             bound = max(left.row_limit, right.row_limit)
-        return replace(
-            left,
-            origin=left.origin
-            if left.origin == right.origin
-            else "Spark DataFrame on all analyzed paths",
-            row_limit=bound,
-            single_partition=left.single_partition
-            if left.single_partition == right.single_partition
-            and left.single_partition_method == right.single_partition_method
-            else None,
-            loop_origins=left.loop_origins & right.loop_origins,
+        return _TrackedValue(
+            replace(
+                left,
+                origin=left.origin
+                if left.origin == right.origin
+                else "Spark DataFrame on all analyzed paths",
+                row_limit=bound,
+                single_partition=left.single_partition
+                if left.single_partition == right.single_partition
+                and left.single_partition_method == right.single_partition_method
+                else None,
+                loop_origins=left.loop_origins & right.loop_origins,
+            ),
+            trace,
         )
 
     @classmethod
-    def _merge(cls, *states: dict[str, Value]) -> dict[str, Value]:
+    def _merge(cls, *states: dict[str, _TrackedValue]) -> dict[str, _TrackedValue]:
         result = states[0].copy()
         for state in states[1:]:
             for name in list(result):
@@ -724,24 +785,33 @@ class SparkAnalyzer(ast.NodeVisitor):
         if repeated:
             self.loop_ids.append(loop_id)
             self.state = {
-                name: replace(
-                    value, loop_origins=value.loop_origins | {(loop_id, name)}
+                name: _TrackedValue(
+                    replace(
+                        tracked.value,
+                        loop_origins=tracked.value.loop_origins | {(loop_id, name)},
+                    ),
+                    tracked.trace,
                 )
-                if value.kind == "frame"
-                else value
-                for name, value in self.state.items()
+                if tracked.value.kind == "frame"
+                else tracked
+                for name, tracked in self.state.items()
             }
         self._block(node.body)
         if repeated:
             self.loop_ids.pop()
             self.state = {
-                name: replace(
-                    value,
-                    loop_origins=frozenset(
-                        token for token in value.loop_origins if token[0] != loop_id
+                name: _TrackedValue(
+                    replace(
+                        tracked.value,
+                        loop_origins=frozenset(
+                            token
+                            for token in tracked.value.loop_origins
+                            if token[0] != loop_id
+                        ),
                     ),
+                    tracked.trace,
                 )
-                for name, value in self.state.items()
+                for name, tracked in self.state.items()
             }
         if repetitions is None or repetitions == 0:
             self.state = self._merge(initial, self.state)
