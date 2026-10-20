@@ -1,9 +1,10 @@
 # RiskMap implementation contract
 
-Status: foundation only, not a shipped feature. This change adds preservation
-tests and stacked-review CI. Graph capture, graph APIs, and HTML/graph-JSON formats
-are planned below; they are not available in v0.8.0. No release version changes
-until the release-readiness slice.
+Status: internal foundations only, not a shipped feature. Slices 01–02 add
+preservation tests, stacked-review CI, and an immutable graph model with a bounded
+collector. Scanners do not import or allocate the graph model yet. Analyzer
+instrumentation, public graph APIs, and HTML/graph-JSON formats are still planned;
+they are not available in v0.8.0. No release version changes until release readiness.
 
 ## Product boundary
 
@@ -105,6 +106,35 @@ are not unique finding IDs. Do not promise stable duplicate identity across edit
 Bound collector growth and visibly label incomplete capture. Graph limits cannot
 drop scan findings or turn analysis errors into successful scans. A finding whose
 trace is unavailable still appears with its ordinary evidence and an explicit gap.
+
+### Internal model (slice 02)
+
+`torchlight/graph.py` is internal, with no top-level public exports or new output
+format. It defines frozen artifact, fact, node, edge, pre-policy finding-anchor,
+and capture-limit records. `AnalysisGraph` snapshots its sequences as tuples and
+checks unique IDs and anchors, valid endpoints/artifacts, and no cross-file edges.
+Tests use standard-library dataclass serialization for reproducibility; this is
+not the public graph-JSON schema, which is introduced in slice 09.
+
+The file-scoped `_GraphCollector` accepts structural call keys from its eventual
+caller. It hashes those keys with node roles instead of retaining raw AST text.
+Matching keys omit artifact paths; node IDs include artifact identity and an
+occurrence suffix. Coordinates, labels, and facts do not change those IDs.
+Document traversal determines occurrence order. Parent references are sorted and
+deduplicated, preserving explicit receiver/alternative/control relationships.
+
+The private default budget is 10,000 records per artifact, counting nodes, edges,
+and finding anchors together. It is a count limit, not a byte or report-wide memory
+ceiling. A node and all incoming edges are accepted or rejected together. Once
+truncated, no new records or occurrence counters grow. Existing anchors can be
+replaced without growing the budget, matching the analyzer's last-diagnostic-wins
+behavior at a rule/location. The collector never owns the actual scan findings.
+
+Snapshots identify truncated artifacts through `CaptureLimit`; `capture_complete`
+describes only capture-budget status, not full source coverage or safety. Missing
+trace anchors can explicitly hold `None`. Scanner filtering, fallback evidence,
+and report-local finding IDs remain slice 07 work. No configuration knob or
+graph allocation is added to ordinary scans in this slice.
 
 ### Scanner integration and comparison
 
@@ -215,6 +245,12 @@ its predecessor's `riskmap/**` branch so review shows the incremental slice.
 Both CI and CodeQL run for those base branches as well as `main`; push triggers
 remain restricted to `main`. Required-check names, permissions, action pins,
 and main/release protections are unchanged. Never use `pull_request_target`.
+
+Local Git history must retain a separate commit boundary for each slice. Set
+`branch.<branch>.gh-merge-base` to its predecessor (`main` for slice 01), and use
+explicit `gh pr create --base <predecessor> --head <branch>` when publication is
+authorized. The standard GitHub CLI supports this stack; no additional service
+is needed. Do not use its dry-run mode as a no-push safeguard: it may still push.
 
 Final merges always go to `main`, bottom-up, using the existing squash policy.
 Do not merge children into feature branches or introduce an integration branch.
