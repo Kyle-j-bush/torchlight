@@ -42,3 +42,20 @@ workload above and the core at commit `14a8b7c`:
 This was an uncontrolled developer machine (the test suite also ran concurrently),
 not a production benchmark or a release performance floor. No cold-cache or
 peak-memory measurements were taken.
+
+## Pre-RiskMap local baseline (2026-10-20)
+
+Before any provenance changes, the same default command above was run against
+commit `ee47c973b9ddd2d5565dc6c9afeb093673344875` on CPython 3.14.8,
+macOS 27.0.1 arm64. No other Torchlight checks were running concurrently.
+
+- Tool-source digest: `0dab5bd2807271fc158b7b06ab2db574d14c991ee78bb24de44f9e1677293bf3`.
+- Corpus digest: `cbba51e93175bcec0cec8812ad481da39704c3794e1df96a3401f5277c49f3be`.
+- Five wall-second samples: 0.195931, 0.196633, 0.203613, 0.198272, 0.197470.
+- Median 0.197470 seconds, range 0.195931–0.203613; 7,200 findings each scan.
+
+This is a warm-cache observation on an uncontrolled developer machine, not a
+speed threshold or a comparison with the earlier observation. Later RiskMap
+measurements must rerun the baseline under matching conditions rather than use
+these elapsed times as a CI gate. Rendering, cold-cache behavior, and peak memory
+were not measured; no production performance or accuracy claim follows.

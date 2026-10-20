@@ -32,6 +32,11 @@ Git comparison tests and distribution verification also require Git 2.45+.
 
 5. Push your branch and open a pull request against `main`.
 
+Dependent RiskMap reviews may target their predecessor's `riskmap/**` branch;
+CI and CodeQL also run for those targets. Follow the
+[RiskMap stack contract](docs/development/riskmap.md#stack-review-and-merging).
+Final merges still go to `main`, bottom-up; do not merge children into feature branches.
+
 For packaging changes, also build and test both distributions:
 
 ```sh
