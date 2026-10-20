@@ -134,6 +134,7 @@ def snapshot(root: Path, output: Path, permission: str) -> None:
             "schema_version": 1,
             "manifest_sha256": digest((output / "manifest.json").read_bytes()),
             "blind_review": False,
+            "labeler": None,
             "reviewer_count": 1,
             "reviewed_files": [],
             "sites": [],
@@ -155,6 +156,13 @@ def audit_labels(labels: dict, manifest_hash: str, sources: dict[str, bytes]) ->
     reviewers = labels.get("reviewer_count")
     if type(reviewers) is not int or reviewers not in (1, 2):
         raise ValueError("reviewer_count must be 1 or 2")
+    if not isinstance(labels.get("labeler"), str) or labels["labeler"] not in {
+        "human",
+        "agent",
+    }:
+        raise ValueError(
+            "labeler must be 'human' or 'agent'; older labels need explicit provenance"
+        )
     reviewed = labels.get("reviewed_files")
     if (
         not isinstance(reviewed, list)
@@ -265,6 +273,7 @@ def evaluate(root: Path, manifest_path: Path, labels_path: Path, output: Path) -
             raise ValueError("invalid corpus-relative path")
     manifest_hash = digest(manifest_path.read_bytes())
     sites = audit_labels(labels, manifest_hash, sources)
+    human_agreement = labels["reviewer_count"] == 2 and labels["labeler"] == "human"
     emitted = Counter()
     raw = {"schema_version": 1, "findings": [], "errors": []}
     for name, data in sources.items():
@@ -294,7 +303,7 @@ def evaluate(root: Path, manifest_path: Path, labels_path: Path, output: Path) -
             if site is None:
                 unreviewed += count
                 continue
-            if labels["reviewer_count"] == 2:
+            if human_agreement:
                 total += 1
                 agree += site["a"] == site["b"]
             if site["decision"] == "uncertain":
@@ -320,7 +329,7 @@ def evaluate(root: Path, manifest_path: Path, labels_path: Path, output: Path) -
                 "total": total,
                 "fraction": agree / total if total else None,
             }
-            if labels["reviewer_count"] == 2
+            if human_agreement
             else None,
         }
     package = Path(torchlight.__file__).parent
@@ -339,14 +348,18 @@ def evaluate(root: Path, manifest_path: Path, labels_path: Path, output: Path) -
         "scanner_python": platform.python_version(),
         "platform": platform.platform(),
         "reviewer_count": labels["reviewer_count"],
+        "labeler": labels["labeler"],
         "files": len(sources),
         "formats": dict(Counter(entry["kind"] for entry in manifest["files"])),
         "source_lines_including_blank_comments": lines,
         "scan_errors": len(raw["errors"]),
         "rules": rules,
         "limits": [
-            "single-reviewer counts are provisional"
-            if labels["reviewer_count"] == 1
+            "agent labels are not independent human validation; agreement is withheld"
+            if labels["labeler"] == "agent"
+            else "human provenance is self-attested, not verified by this runner",
+            "counts without two independent human reviewers are provisional"
+            if not human_agreement
             else "agreement is site-decision agreement, not pattern-presence agreement",
             "opaque-cell/receiver coverage and confidence intervals not measured",
             "inline suppressions honored; no project config, baseline, plugins, or session assumptions",
@@ -370,7 +383,7 @@ def main(argv=None) -> int:
     freeze.add_argument("--permission", required=True)
     freeze.add_argument("--output", type=Path, required=True)
     run = commands.add_parser(
-        "evaluate", help="compare independent labels with frozen-source scans"
+        "evaluate", help="compare audited labels with frozen-source scans"
     )
     run.add_argument("root", type=Path)
     run.add_argument("--manifest", type=Path, required=True)

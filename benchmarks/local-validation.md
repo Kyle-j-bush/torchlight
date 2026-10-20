@@ -53,6 +53,14 @@ Fill `reviewed_files` with every manifest path only after the audit is complete,
 and set `blind_review: true` only if it is true. The program checks the attestation
 and coverage list; it cannot verify that a human audit occurred.
 
+Since v0.8.0, explicitly set top-level `labeler` to `human` or `agent` before
+evaluation. The blank template uses null so provenance cannot be assumed silently.
+For mixed or agent-assisted judgments use `agent`; use `human` only when all
+declared reviewers made their judgments without agent-generated labels. This
+records provenance, not reviewer names. It is self-attested, not a verified identity.
+Existing v0.7 labels must gain this field; missing/invalid values fail explicitly.
+The development artifact remains schema 1; the scanner's JSON schema is unchanged.
+
 Each entry in `sites` must look like:
 
 ```json
@@ -87,6 +95,8 @@ with consensus. A changed/disagreed final decision needs third-reviewer rational
 in `adjudication`, or leave `decision: "uncertain"`. Pattern-presence labels and
 independent inventories/adjudication records should be retained separately; the
 script reports only initial **site-decision** agreement, not full inter-rater quality.
+Agreement is withheld (`null`) unless there are two declared human reviewers.
+Two agent label sets do not become independent human evidence by agreeing.
 
 ## 3. Evaluate offline and review artifacts
 
@@ -106,10 +116,13 @@ files are written, never replacing existing results:
   snippets, paths, permission statement, reviewer identities, or error messages.
   Review even these aggregates before deciding whether publication is permitted.
   Hashes/counts can still identify a small private corpus. Nothing publishes them.
+  It always includes `labeler`, even for agent-authored rehearsals.
 
 Per rule the summary reports TP/FP/FN, uncertain sites, unreviewed emissions,
 precision/recall, FP per source KLOC, and (only with two reviewers) original
-agreement numerator/denominator/fraction. One diagnostic matches at most one site;
+agreement numerator/denominator/fraction when both reviewers are declared human.
+Agent-labeled fractions are rehearsal counts, not independent accuracy estimates.
+One diagnostic matches at most one site;
 additional diagnostics at a reviewed surface site count as excess false positives.
 An emitted site absent from the independent inventory is **unreviewed**, not
 automatically a false positive. Arrange blind re-review before final classification.
