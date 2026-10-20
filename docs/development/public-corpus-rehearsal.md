@@ -28,7 +28,7 @@ accuracy, tool comparison, or 1.0 quality gate follows from these numbers.
 
 ## Audit and execution
 
-The source archive and all pilot artifacts stayed outside this repository.
+The source archive, manifests, label ledger, and raw findings stayed outside this repository.
 The existing `scripts.validate_corpus snapshot` command froze the full source
 manifest **before** scanner evaluation. All 147 files were then read, including
 the complete code and context rather than just matching lines. Repeated license

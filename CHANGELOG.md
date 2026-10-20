@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.8.0 — 2026-10-19
+
+### Added
+
+- 24 agent-authored pipeline-shaped synthetic cases (68 total), each with a
+  reviewable rationale. Cover longer Delta reader/writer chains, helper boundaries,
+  plotting conversions, daily collection loops, union-bound invalidation, reviewed
+  small exports, projections, local iteration, and both notebook formats.
+  All original expectations remain unchanged; these are regression proposals,
+  not independently established ground truth or production accuracy evidence.
+- Explicit `labeler: human | agent` provenance in local validation labels and
+  summaries. Blank templates require a deliberate choice; missing/invalid provenance
+  fails instead of silently assuming human review. Agent-assisted/mixed reviews
+  use `agent`; agreement metrics require two declared human reviewers. The runner
+  records a self-attestation, not a verified reviewer identity.
+- A complete, pinned Apache Spark v3.5.1 example rehearsal: 147 Python files,
+  9,447 source lines, and 35 source-audited candidate sites, labeled by one agent
+  before viewing findings. Primary Python 3.14 and repeat Python 3.12 runs match.
+  Only the exact aggregate summary and caveats are published; source, per-file
+  labels and raw findings remain outside the repository. No Spark code executed.
+
+### Interpretation and compatibility
+
+The rehearsal emitted one TL001 warning on an intentionally small Arrow round-trip,
+classified as unhelpful by the frozen agent judgment. There were no positive
+agent-labeled sites, so recall is **not estimable** for any rule. These are
+framework examples, not production pipelines; no independent human review,
+production precision/recall, or broad validation milestone is claimed. No detector
+was tuned to hide this result. The multi-project independent protocol remains open.
+
+Existing v0.7 development `labels.json` files must explicitly gain `labeler` before
+evaluation; their schema-1 artifact format is otherwise retained. Summaries add
+the same provenance and withhold agreement for agent labels even with two label
+sets. No changes to scanner rules, Python/plugin API, CLI options/behavior,
+JSON/fingerprint/baseline schemas, coordinates, runtime dependencies, or Python
+3.12+ support. Validation scripts remain source-checkout/sdist development tools.
+
 ## 0.7.0 — 2026-10-18
 
 ### Added

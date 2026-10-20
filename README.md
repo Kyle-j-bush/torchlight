@@ -16,10 +16,11 @@ Requires Python 3.12+. No third-party runtime dependencies.
 
 ## Install and run
 
-**v0.7.0** adds explicitly registered Python detector plugins, a reproducible
-synthetic timing harness, and private local corpus-validation tools. No real-world
-accuracy results are claimed. Databricks notebooks and TL005 shipped in v0.6.0;
-Git comparison shipped in v0.5.0. See the [plugin trust boundary](docs/plugins.md).
+**v0.8.0** adds 24 pipeline-shaped regression cases, explicit human/agent label
+provenance, and an [agent-labeled Apache Spark example rehearsal](docs/development/public-corpus-rehearsal.md).
+The five scanner rules are unchanged. This is coverage and workflow evidence,
+not independent or production accuracy validation. Plugins shipped in v0.7.0;
+see their [trust boundary](docs/plugins.md).
 
 ```sh
 python -m pip install --upgrade torchlight-spark
@@ -165,7 +166,7 @@ Add the isolated-install hook to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.7.0
+    rev: v0.8.0
     hooks:
       - id: torchlight
 ```
@@ -264,14 +265,19 @@ python -m unittest discover -s tests
 python -m scripts.check_benchmark
 ```
 
-The [public corpus](benchmarks/README.md) has 44 labeled **synthetic** Python and
+The [public corpus](benchmarks/README.md) has 68 labeled **synthetic** Python and
 notebook cases, including intentional uses and unrelated methods. It is regression
 coverage, not a measured production accuracy claim. Next comes validation with
 real Spark reviewers and permissioned code before adding more rules.
 The [real-world benchmark protocol](benchmarks/real-world-protocol.md) specifies
-permission, independent labeling, and per-rule metrics; no results are claimed yet.
+permission, independent human labeling, and per-rule metrics. The separate
+[147-file public-example rehearsal](docs/development/public-corpus-rehearsal.md)
+has agent labels, one agent-judged false positive, and no positive sites from
+which to estimate recall. No production accuracy or independent review is claimed.
 The [local pilot runner](benchmarks/local-validation.md) prepares frozen manifests
 and blank labels before scanning; private source/results stay outside this repo.
+Labels now require `human`/`agent` provenance; agreement requires two declared
+human reviewers. Existing v0.7 labels need that explicit addition before evaluation.
 The [scan-timing harness](benchmarks/performance.md) records reproducible synthetic
 timings without a noisy CI speed gate. Neither replaces real-world validation.
 

@@ -26,12 +26,14 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Follow-up roadmap](development/roadmap.md).
 - [Internal detector contributor guide](development/detectors.md).
 - [Real-world benchmark protocol](../benchmarks/real-world-protocol.md).
-- [Local validation pilot](../benchmarks/local-validation.md): frozen corpus and independent labels, no published results yet.
+- [Local validation pilot](../benchmarks/local-validation.md): frozen corpus, explicit labeler provenance, and independent-review requirements.
+- [Apache Spark example rehearsal](development/public-corpus-rehearsal.md): full 147-file agent audit and aggregate-only results, not production validation.
 - [Synthetic scan timing](../benchmarks/performance.md): reproducible workload and non-gating release artifacts.
 - [Synthetic regression corpus](../benchmarks/README.md).
 - [Contributing](../CONTRIBUTING.md) and [security](../SECURITY.md).
 
-These guides describe v0.7.0, including explicit plugins, validation tooling,
+These guides describe v0.8.0, including rationale-backed regressions, labeler
+provenance, a public-example rehearsal, explicit plugins, validation tooling,
 five rules, Databricks Python exports, Git comparison, and the pre-1.0 Python API.
 Spark-version targeting flags and
 editor integrations remain future work. There

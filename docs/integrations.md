@@ -29,12 +29,12 @@ After setting up Python 3.12+ in your workflow:
 
 ```yaml
 - name: Install Torchlight
-  run: python -m pip install torchlight-spark==0.7.0
+  run: python -m pip install torchlight-spark==0.8.0
 - name: Review Spark code
   run: torchlight --format github jobs/ notebooks/
 ```
 
-Version 0.7.0 supports project configuration, baselines, Git comparison, SARIF,
+Version 0.8.0 supports project configuration, baselines, Git comparison, SARIF,
 five rules, and Databricks Python source notebooks.
 Run from your project's root. Pin setup and checkout actions by full commit SHA in production
 workflows.
@@ -65,7 +65,7 @@ fingerprints, and limitations](reporting.md).
 ```yaml
 repos:
   - repo: https://github.com/Kyle-j-bush/torchlight
-    rev: v0.7.0
+    rev: v0.8.0
     hooks:
       - id: torchlight
 ```

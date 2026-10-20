@@ -39,6 +39,8 @@ precision/recall and reviewer burden, plus performance reporting. It is a plan,
 not a collected dataset or a claim of measured accuracy.
 
 The [local pilot tools](local-validation.md) freeze permissioned source and blank
-labels before evaluation. No real-world results have been collected yet.
+labels before evaluation. The [public-example rehearsal](../docs/development/public-corpus-rehearsal.md)
+uses one agent's labels on 147 Apache Spark files; it is not independent or
+production accuracy validation, and supplies no positive sites for recall.
 The separate [timing harness](performance.md) measures a deterministic synthetic
 workload; it does not benchmark production accuracy or Spark runtime savings.
