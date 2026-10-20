@@ -1,6 +1,7 @@
 # Copyright 2026 Kyle Bush
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import re
 import subprocess
 import sys
@@ -9,6 +10,33 @@ from pathlib import Path
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_public_rehearsal_aggregate_is_explicitly_agent_labeled(self):
+        root = Path(__file__).resolve().parents[1]
+        page = (root / "docs/development/public-corpus-rehearsal.md").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(r"```json\n(.*?)\n```", page, re.DOTALL)
+        self.assertIsNotNone(match)
+        summary = json.loads(match[1])
+        self.assertEqual((summary["labeler"], summary["reviewer_count"]), ("agent", 1))
+        self.assertEqual((summary["files"], summary["scan_errors"]), (147, 0))
+        self.assertEqual(sum(rule["fp"] for rule in summary["rules"].values()), 1)
+        self.assertTrue(
+            all(
+                rule["recall"] is None and rule["initial_agreement"] is None
+                for rule in summary["rules"].values()
+            )
+        )
+        for private_field in (
+            "path",
+            "snippet",
+            "permission",
+            "reviewed_files",
+            "sites",
+            "rationale",
+        ):
+            self.assertNotIn(f'"{private_field}":', match[1])
+
     def test_generated_catalog_matches_metadata_and_has_curated_guides(self):
         root = Path(__file__).resolve().parents[1]
         result = subprocess.run(

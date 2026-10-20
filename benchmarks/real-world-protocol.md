@@ -1,7 +1,9 @@
 # Real-world validation protocol — draft 3
 
-**Status:** protocol and local pilot tooling, October 19, 2026. No real-world corpus has been collected
-or independently labeled, and no production accuracy figures are claimed. The
+**Status:** protocol and local pilot tooling, October 19, 2026. An
+[agent-labeled public-example rehearsal](../docs/development/public-corpus-rehearsal.md)
+is documented, but no independently human-labeled production corpus or production
+accuracy figures are claimed. The
 existing [68 synthetic cases](README.md) remain regression coverage, not benchmark
 evidence. Do not execute any submitted source or notebook cells.
 

@@ -1,7 +1,9 @@
 # Local permissioned-corpus pilot
 
-**Tooling only (v0.7.0). No donated corpus or reviewer labels have been received,
-and no real-world results are claimed.** This development script assists the
+**Tooling since v0.7.0; labeler provenance since v0.8.0.** The
+[public-example rehearsal](../docs/development/public-corpus-rehearsal.md) uses
+agent labels, not independent human review. No donated production corpus or
+human accuracy results are claimed. This development script assists the
 [full protocol](real-world-protocol.md); it does not complete it by itself.
 Scripts are available in a source checkout/sdist, not as new installed CLI commands.
 
