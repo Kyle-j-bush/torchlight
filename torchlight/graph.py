@@ -166,6 +166,15 @@ class _GraphCollector:
         self._anchors: dict[tuple[str, Location], FindingAnchor] = {}
         self._occurrences: Counter[str] = Counter()
 
+    def set_source_kind(self, source_kind: SourceKind) -> None:
+        """Resolve source format during dispatch, before capturing any records."""
+        if source_kind == self.artifact.source_kind:
+            return
+        if self._nodes or self._anchors or self._truncated:
+            raise ValueError("cannot change source kind after capture has started")
+        self.artifact = GraphArtifact(self.artifact.path, source_kind)
+        self._limit = CaptureLimit(self.artifact.id, self._limit.max_records)
+
     def _reserve(self, count: int) -> bool:
         size = len(self._nodes) + len(self._edges) + len(self._anchors)
         if self._truncated or size + count > self._limit.max_records:

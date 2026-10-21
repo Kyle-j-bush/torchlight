@@ -138,6 +138,20 @@ class GraphTests(unittest.TestCase):
         self.assertTrue(duplicate.endswith("-2"))
         self.assertEqual(second.build().nodes[-2].key, second.build().nodes[-1].key)
 
+    def test_dispatch_can_resolve_source_kind_only_before_capture(self):
+        collector = self.collector(max_records=1)
+        original = collector.build()
+        collector.set_source_kind("databricks")
+        self.assertEqual(original.artifacts[0].source_kind, "python")
+        self.assertEqual(collector.artifact, GraphArtifact("job.py", "databricks"))
+        self.source(collector)
+        collector.set_source_kind("databricks")
+        with self.assertRaisesRegex(ValueError, "after capture has started"):
+            collector.set_source_kind("python")
+        self.assertFalse(collector.anchor("TL001", Location(2), None))
+        graph = collector.build()
+        self.assertEqual(graph.limits, (CaptureLimit(collector.artifact.id, 1),))
+
     def test_matching_keys_distinguish_roles_calls_and_scopes_not_artifact_paths(self):
         collectors = [
             self.collector(),

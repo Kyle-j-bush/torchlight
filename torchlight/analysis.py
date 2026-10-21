@@ -320,8 +320,24 @@ class SparkAnalyzer(ast.NodeVisitor):
             key=lambda f: (f.location.line, f.location.column, f.rule_id),
         )
 
-    def forget(self) -> None:
+    def forget(
+        self, *, reason: str | None = None, location: Location | None = None
+    ) -> None:
         """Discard stale knowledge after an unparseable or opaque notebook cell."""
+        if self._collector is not None and reason is not None:
+            tracked = [v for v in self.state.values() if v.value.kind in TRACE_KINDS]
+            label = reason + "; previous bindings invalidated"
+            if any(v.trace is None for v in tracked):
+                label += "; prior trace unavailable"
+            self._collector.add_node(
+                "opaque",
+                label,
+                structural_key="notebook-invalidation",
+                location=location,
+                parents=tuple(
+                    (v.trace, "control") for v in tracked if v.trace is not None
+                ),
+            )
         self.state.clear()
 
     def _location(self, node: ast.AST) -> Location:

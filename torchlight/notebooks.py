@@ -8,7 +8,8 @@ import json
 from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error, parse_source
-from torchlight.diagnostics import Finding
+from torchlight.diagnostics import Finding, Location
+from torchlight.graph import _GraphCollector
 from torchlight.plugins import Plugin
 from torchlight.suppressions import apply_suppressions
 
@@ -50,14 +51,21 @@ def scan_notebook(
     *,
     assume_sessions: tuple[str, ...] = (),
     plugins: tuple[Plugin, ...] = (),
+    _collector: _GraphCollector | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Return (findings, errors), numbering code cells and their lines from 1."""
+    if _collector is not None:
+        _collector.set_source_kind("jupyter")
     try:
         source = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError) as exc:
         return [], [f"{path}: {exc}"]
     return scan_notebook_source(
-        path, source, assume_sessions=assume_sessions, plugins=plugins
+        path,
+        source,
+        assume_sessions=assume_sessions,
+        plugins=plugins,
+        _collector=_collector,
     )
 
 
@@ -67,8 +75,11 @@ def scan_notebook_source(
     *,
     assume_sessions: tuple[str, ...] = (),
     plugins: tuple[Plugin, ...] = (),
+    _collector: _GraphCollector | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Analyze notebook JSON in memory using the same cell boundaries as files."""
+    if _collector is not None:
+        _collector.set_source_kind("jupyter")
     try:
         notebook = json.loads(source)
     except json.JSONDecodeError as exc:
@@ -82,12 +93,14 @@ def scan_notebook_source(
 
     findings = []
     errors = []
-    analyzer = SparkAnalyzer(str(path), assume_sessions, plugins=plugins)
+    analyzer = SparkAnalyzer(
+        str(path), assume_sessions, plugins=plugins, _collector=_collector
+    )
     number = 0
     for index, cell in enumerate(cells, 1):
         if not isinstance(cell, dict):
             errors.append(f"{path}: notebook cell entry {index} must be an object")
-            analyzer.forget()
+            analyzer.forget(reason=f"Invalid notebook entry {index}")
             continue
         if cell.get("cell_type") != "code":
             continue
@@ -99,16 +112,21 @@ def scan_notebook_source(
         filename = f"{path}:cell {number}"
         if not isinstance(source, str):
             errors.append(f"{filename}: source must be a string or a list of strings")
-            analyzer.forget()
+            analyzer.forget(reason=f"Invalid source in code cell {number}")
             continue
         try:
             parsed = _parse_cell(source, filename)
         except (SyntaxError, ValueError) as exc:
             errors.append(f"{filename}: {format_syntax_error(exc)}")
-            analyzer.forget()
+            analyzer.forget(
+                reason=f"Unparseable code cell {number}",
+                location=Location(1, cell=number),
+            )
             continue
         if parsed is None:
-            analyzer.forget()
+            analyzer.forget(
+                reason=f"Opaque code cell {number}", location=Location(1, cell=number)
+            )
             continue
 
         tree, source = parsed

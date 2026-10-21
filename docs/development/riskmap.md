@@ -1,10 +1,11 @@
 # RiskMap implementation contract
 
-Status: internal foundations only, not a shipped feature. Slices 01–05 add
+Status: internal foundations only, not a shipped feature. Slices 01–06 add
 preservation tests, stacked-review CI, and an immutable graph model with a bounded
 collector, private tracked analyzer state, and opt-in internal linear/control-flow
-trace capture. Ordinary scans do not allocate graph records. Notebook plumbing,
-public graph APIs, and HTML/graph-JSON formats are still planned; they
+trace capture and file/blob notebook plumbing with invalidation boundaries.
+Ordinary scans do not allocate graph records. Public graph APIs and
+HTML/graph-JSON formats are still planned; they
 are not available in v0.8.0. No release version changes until release readiness.
 
 ## Product boundary
@@ -155,7 +156,8 @@ Default-scan timing is recorded in [the performance log](../../benchmarks/perfor
 
 ### Linear trace capture (slice 04)
 
-Only internal callers can opt in by passing `_collector` to `SparkAnalyzer`.
+Internal callers can opt in by passing `_collector` to `SparkAnalyzer` or, since
+slice 06, the low-level file/blob scanners.
 The existing traversal records session/read and annotation-backed sources,
 receiver transforms, explicit limit/partition operations, writer setup/options,
 actions, and eager list/tuple consumption of local iterators. Aliases share their
@@ -178,8 +180,9 @@ and last-diagnostic-wins collisions. Capture limits never drop findings or chang
 plugin facts/errors. Unsupported frame receiver methods/attributes produce opaque
 endpoints without granting identity to their result. Missing prior endpoints are
 labeled rather than connected to a guessed path. Slice 05 extends these boundaries
-to free calls and control flow and adds alternatives/loop context. Notebook invalidation,
-scanner filtering, report-local finding IDs, and public rendering remain deferred.
+to free calls and control flow and adds alternatives/loop context. Slice 06 adds
+notebook invalidation; scanner filtering, report-local finding IDs, and public
+rendering remain deferred.
 
 ### Control-flow capture (slice 05)
 
@@ -215,7 +218,45 @@ conservative invalidation of names written in the try body, `except*` retains th
 existing alternative-state approximation, boolean result types remain unknown,
 and direct return/raise/break/continue stops use the existing block traversal.
 There is no interprocedural inference, loop fixed point, or claim that all
-analyzed paths can execute. Notebook invalidation boundaries remain slice 06.
+analyzed paths can execute.
+
+### Notebook and file/blob capture (slice 06)
+
+All low-level file and in-memory scanners accept an optional private `_collector`
+without changing their `(findings, errors)` returns. A caller supplies one fresh
+collector per artifact/scan. Dispatch resolves its source kind to `python`,
+`jupyter`, or `databricks` before any records are captured; a source-kind change
+after capture starts is rejected. The collector and budget span all notebook
+cells, as does the existing analyzer state. Ordinary scans allocate neither a
+collector nor graph records. Public `Scanner.scan`/`ScanReport` remain unchanged.
+
+Aliases, constraints, writer facts, iterator endpoints, alternatives, and loop
+context cross cells through that existing tracked state, not through reconstructed
+evidence. Jupyter graph coordinates use code-cell numbers and cell-local character
+columns, ignoring markdown/raw cells and raw JSON layout. Databricks graph
+coordinates use physical export lines and character columns including decoded
+`# MAGIC` prefixes, exactly like findings. Known Python magics, shell-line
+blanking, string-token handling, and conservative document-order behavior retain
+their existing policy; capture does not execute or reinterpret them.
+
+Opaque or unparseable cells record an opaque invalidation boundary before clearing
+bindings, including when no source or downstream finding exists. Incoming
+`control` edges identify the invalidated tracked context, not receiver lineage
+through the cell; no outgoing edge preserves those discarded bindings. Fresh
+recognized reads can recover later. Whole-cell boundaries point to the cell's
+start (the first code/directive line for Databricks), not an inferred offending
+token. Invalid Jupyter entry/source metadata has no source coordinate; its label
+identifies the entry/code cell instead. Missing prior traces are disclosed, and
+exhausted budgets never suppress findings, errors, or state invalidation.
+
+Read/decoding errors, invalid notebook documents, and unrecoverable Databricks
+tokenization failures retain their existing errors, without invented cell paths.
+Graph completeness still describes only budget status, not successful analysis.
+Anchors remain pre-suppression records; final filtering, error reporting, and
+finding-link fallback are slice 07 work. Preservation goldens and file/blob,
+capture-on/off, plugin, budget, and coordinate tests cover all five rules and all
+three source kinds, plus the 68-case regression corpus. This passes the slice-06
+local evidence gate, not independent explanation review or production validation.
 
 ### Scanner integration and comparison
 

@@ -9,7 +9,8 @@ import tokenize
 from pathlib import Path
 
 from torchlight.analysis import SparkAnalyzer, format_syntax_error
-from torchlight.diagnostics import Finding
+from torchlight.diagnostics import Finding, Location
+from torchlight.graph import _GraphCollector
 from torchlight.notebooks import PYTHON_CELL_MAGICS, _parse_cell
 from torchlight.plugins import Plugin
 from torchlight.suppressions import apply_suppressions
@@ -24,7 +25,10 @@ def scan_databricks_source(
     *,
     assume_sessions: tuple[str, ...] = (),
     plugins: tuple[Plugin, ...] = (),
+    _collector: _GraphCollector | None = None,
 ) -> tuple[list[Finding], list[str]]:
+    if _collector is not None:
+        _collector.set_source_kind("databricks")
     lines = source.splitlines(keepends=True)
     comments = {}
     strings = 0
@@ -43,7 +47,9 @@ def scan_databricks_source(
 
     separators = [line for line, comment in comments.items() if comment == SEPARATOR]
     starts, ends = [0, *separators], [*(line - 1 for line in separators), len(lines)]
-    analyzer = SparkAnalyzer(str(path), assume_sessions, plugins=plugins)
+    analyzer = SparkAnalyzer(
+        str(path), assume_sessions, plugins=plugins, _collector=_collector
+    )
     findings, errors = [], []
     for cell, (start, end) in enumerate(zip(starts, ends, strict=True), 1):
         decoded = []
@@ -65,12 +71,20 @@ def scan_databricks_source(
             ),
             None,
         )
+        boundary_line = start + (first or 0) + 1
+        boundary_location = (
+            Location(boundary_line, prefixes.get(boundary_line, 0) + 1, cell)
+            if _collector is not None
+            else None
+        )
         if first is not None and decoded[first].strip() == "%python":
             decoded[first] = "\n"
         elif first is not None and decoded[first].lstrip().startswith("%%"):
             magic = decoded[first].lstrip()[2:].split()
             if not magic or magic[0] not in PYTHON_CELL_MAGICS:
-                analyzer.forget()
+                analyzer.forget(
+                    reason=f"Opaque code cell {cell}", location=boundary_location
+                )
                 continue
         cell_source = "".join(decoded)
         try:
@@ -79,10 +93,14 @@ def scan_databricks_source(
             if isinstance(exc, SyntaxError) and exc.lineno is not None:
                 exc.lineno += start
             errors.append(f"{path}:cell {cell}: {format_syntax_error(exc)}")
-            analyzer.forget()
+            analyzer.forget(
+                reason=f"Unparseable code cell {cell}", location=boundary_location
+            )
             continue
         if parsed is None:
-            analyzer.forget()
+            analyzer.forget(
+                reason=f"Opaque code cell {cell}", location=boundary_location
+            )
             continue
         tree, cleaned = parsed
         ast.increment_lineno(tree, start)

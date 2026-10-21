@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from torchlight import Config, Rule, Scanner, ScanReport
-from torchlight.analysis import SparkAnalyzer, parse_source
+from torchlight.files import scan_source
 from torchlight.graph import GraphArtifact, _GraphCollector
 from torchlight.plugins import API_VERSION, CallFacts, Plugin, Value
 
@@ -162,39 +162,41 @@ class RiskMapPreservationTests(unittest.TestCase):
                 self.assertTrue(observed)
                 self.assertEqual(digest(observed), FACT_DIGESTS[name])
 
-    def test_private_capture_and_limits_preserve_python_outputs_and_plugin_facts(self):
-        source = "".join(CELLS)
-        for budget in (1, 8, 10_000):
-            with self.subTest(budget=budget):
-                detector = RecordingDetector()
-                plugin = Plugin(
-                    Rule(detector.rule_id, "Record facts", "Test only.", "No action."),
-                    detector,
-                )
-                collector = _GraphCollector(
-                    GraphArtifact("pipeline.py", "python"), max_records=budget
-                )
-                analyzer = SparkAnalyzer(
-                    "pipeline.py", plugins=(plugin,), _collector=collector
-                )
-                findings = analyzer.analyze(parse_source(source, "pipeline.py"), source)
-                report = ScanReport(findings, root=self.root)
-                self.assertEqual(
-                    digest(self.output_snapshot(report)), OUTPUT_DIGESTS["pipeline.py"]
-                )
-                observed = []
-                for facts in detector.facts:
-                    self.assertIs(type(facts.receiver), Value)
-                    record = asdict(facts)
-                    record["receiver"]["loop_origins"] = sorted(
-                        facts.receiver.loop_origins
-                    )
-                    observed.append(record)
-                self.assertEqual(digest(observed), FACT_DIGESTS["pipeline.py"])
-                graph = collector.build()
-                self.assertEqual(graph.capture_complete, budget == 10_000)
-                self.assertLessEqual(
-                    len(graph.nodes) + len(graph.edges) + len(graph.anchors), budget
-                )
-                if graph.capture_complete:
-                    self.assertEqual(len(graph.anchors), len(findings))
+    def test_private_capture_and_limits_preserve_all_source_outputs_and_plugin_facts(
+        self,
+    ):
+        for name, source in SOURCES.items():
+            for budget in (1, 8, 10_000):
+                with self.subTest(source=name, budget=budget):
+                    self.check_capture(name, source, budget)
+
+    def check_capture(self, name, source, budget):
+        detector = RecordingDetector()
+        plugin = Plugin(
+            Rule(detector.rule_id, "Record facts", "Test only.", "No action."),
+            detector,
+        )
+        collector = _GraphCollector(GraphArtifact(name, "python"), max_records=budget)
+        findings, errors = scan_source(
+            Path(name),
+            source.encode("utf-8"),
+            plugins=(plugin,),
+            _collector=collector,
+        )
+        self.assertEqual(errors, [])
+        report = ScanReport(findings, root=self.root)
+        self.assertEqual(digest(self.output_snapshot(report)), OUTPUT_DIGESTS[name])
+        observed = []
+        for facts in detector.facts:
+            self.assertIs(type(facts.receiver), Value)
+            record = asdict(facts)
+            record["receiver"]["loop_origins"] = sorted(facts.receiver.loop_origins)
+            observed.append(record)
+        self.assertEqual(digest(observed), FACT_DIGESTS[name])
+        graph = collector.build()
+        self.assertEqual(graph.capture_complete, budget == 10_000)
+        self.assertLessEqual(
+            len(graph.nodes) + len(graph.edges) + len(graph.anchors), budget
+        )
+        if graph.capture_complete:
+            self.assertEqual(len(graph.anchors), len(findings))
