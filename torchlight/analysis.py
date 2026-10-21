@@ -4,12 +4,13 @@
 """Conservative, local Spark DataFrame analysis without importing or executing Spark."""
 
 import ast
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, replace
 
 from torchlight.detectors import DETECTORS
 from torchlight.diagnostics import RULES, Finding, Location
 from torchlight.facts import CallFacts, Value
-from torchlight.graph import GraphFacts, NodeKind, _GraphCollector
+from torchlight.graph import EdgeRelation, GraphFacts, NodeKind, _GraphCollector
 from torchlight.identity import call_key
 from torchlight.plugins import Plugin
 
@@ -139,6 +140,17 @@ FRAME_ACTIONS = {
     "toLocalIterator",
     "toPandas",
 }
+TRACE_KINDS = {
+    "builder",
+    "session",
+    "reader",
+    "frame",
+    "grouped",
+    "frame_na",
+    "writer",
+    "writer_v2",
+    "local_iterator",
+}
 GENERATORS = {
     "explode",
     "explode_outer",
@@ -264,6 +276,7 @@ class SparkAnalyzer(ast.NodeVisitor):
     ):
         self.path = path
         self._collector = _collector
+        self._controls: list[str | None] = []
         self.detectors = (*DETECTORS, *plugins)
         self.rules = {**RULES, **{plugin.rule.code: plugin.rule for plugin in plugins}}
         self.state: dict[str, _TrackedValue] = {
@@ -327,24 +340,58 @@ class SparkAnalyzer(ast.NodeVisitor):
         label: str,
         before: _TrackedValue | None,
         after: Value | None,
+        *,
+        parents: tuple[tuple[str, EdgeRelation], ...] = (),
+        binding: str = "",
     ) -> str | None:
         if self._collector is None:
             return None
-        parents = ()
+        if self._controls and self._controls[-1] is not None:
+            parents += ((self._controls[-1], "control"),)
         if before is not None:
             if before.trace is not None:
-                parents = ((before.trace, "receiver"),)
+                parents += ((before.trace, "receiver"),)
             elif kind != "source":
                 label += "; prior trace unavailable"
         return self._collector.add_node(
             kind,
             label,
-            structural_key=call_key(node, self.parents),
+            structural_key=call_key(node, self.parents)
+            + (f":{binding}" if binding else ""),
             location=self._location(node),
             parents=parents,
             before=_graph_facts(before.value if before is not None else None),
             after=_graph_facts(after),
         )
+
+    @contextmanager
+    def _control(self, node: ast.AST, kind: NodeKind, label: str):
+        if self._collector is None:
+            yield
+            return
+        self._controls.append(self._trace(node, kind, label, None, None))
+        try:
+            yield
+        finally:
+            self._controls.pop()
+
+    def _opaque(self, node: ast.AST, label: str, values) -> None:
+        if self._collector is None:
+            return
+        tracked = [v for v in values if v is not None and v.value.kind in TRACE_KINDS]
+        if tracked:
+            if any(v.trace is None for v in tracked):
+                label += "; prior trace unavailable"
+            self._trace(
+                node,
+                "opaque",
+                label,
+                None,
+                None,
+                parents=tuple(
+                    (v.trace, "control") for v in tracked if v.trace is not None
+                ),
+            )
 
     def _emit(self, code: str, node: ast.Call, evidence: tuple[str, ...], detail=""):
         message = self.rules[code].title + detail
@@ -401,6 +448,11 @@ class SparkAnalyzer(ast.NodeVisitor):
     def visit_ImportFrom(self, node):
         for alias in node.names:
             if alias.name == "*":
+                self._opaque(
+                    node,
+                    "Wildcard import; previous bindings invalidated",
+                    self.state.values(),
+                )
                 self.forget()
                 continue
             value = None
@@ -464,7 +516,8 @@ class SparkAnalyzer(ast.NodeVisitor):
             if (
                 self._collector is not None
                 and receiver is not None
-                and receiver.value.kind == "frame"
+                and receiver.value.kind in TRACE_KINDS
+                and (result is None or receiver.value.kind == "frame")
             ):
                 trace = self._trace(
                     node,
@@ -506,8 +559,14 @@ class SparkAnalyzer(ast.NodeVisitor):
             ):
                 return self._method(arguments[0], function.value.origin, node)
             if receiver is not None:
-                return self._method(receiver, node.func.attr, node)
-            # shortcut: free calls lack boundary nodes, add with slice 05 opacity capture.
+                result = self._method(receiver, node.func.attr, node)
+                if result is not None or receiver.value.kind in TRACE_KINDS:
+                    return result
+            self._opaque(
+                node,
+                "Unrecognized call; tracked argument context only; return value not tracked",
+                arguments,
+            )
             return None
         if isinstance(node, ast.NamedExpr):
             previous = self.assignment_targets
@@ -521,16 +580,28 @@ class SparkAnalyzer(ast.NodeVisitor):
             if isinstance(node.test, ast.Constant):
                 return self._expr(node.body if node.test.value else node.orelse)
             initial = self.state.copy()
-            left = self._expr(node.body)
+            with self._control(node, "merge", "Conditional body; analyzed alternative"):
+                left = self._expr(node.body)
             left_state = self.state.copy()
             self.state = initial
-            right = self._expr(node.orelse)
-            self.state = self._merge(left_state, self.state)
-            return self._merge_value(left, right)
+            with self._control(node, "merge", "Conditional else; analyzed alternative"):
+                right = self._expr(node.orelse)
+            self.state = self._merge(left_state, self.state, node=node)
+            return self._merge_paths(node, (left, right))
         if isinstance(node, ast.BoolOp):
             branches = []
+            values = []
             for index, expression in enumerate(node.values):
-                self._expr(expression)
+                if index:
+                    with self._control(
+                        expression,
+                        "merge",
+                        "Boolean continuation; analyzed short-circuit alternative",
+                    ):
+                        value = self._expr(expression)
+                else:
+                    value = self._expr(expression)
+                values.append(value)
                 if isinstance(expression, ast.Constant):
                     stops = (isinstance(node.op, ast.And) and not expression.value) or (
                         isinstance(node.op, ast.Or) and expression.value
@@ -542,34 +613,66 @@ class SparkAnalyzer(ast.NodeVisitor):
                     expression, ast.Constant
                 ):
                     branches.append(self.state.copy())
-            self.state = self._merge(*branches)
+            self.state = self._merge(*branches, node=node)
+            self._opaque(
+                node,
+                "Boolean result not tracked; analyzed operand context only",
+                values,
+            )
             return None
         if isinstance(node, ast.Lambda):
             state = self.state.copy()
-            loops, targets = self.loop_ids, self.assignment_targets
-            self.loop_ids, self.assignment_targets = [], set()
-            self._parameters(node.args)
-            self._expr(node.body)
-            self.state, self.loop_ids, self.assignment_targets = state, loops, targets
+            loops, targets, controls = (
+                self.loop_ids,
+                self.assignment_targets,
+                self._controls,
+            )
+            self.loop_ids, self.assignment_targets, self._controls = [], set(), []
+            try:
+                self._parameters(node.args)
+                self._expr(node.body)
+            finally:
+                self.state, self.loop_ids, self.assignment_targets = (
+                    state,
+                    loops,
+                    targets,
+                )
+                self._controls = controls
             return None
         if isinstance(
             node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
         ):
             state = self.state.copy()
-            for generator in node.generators:
-                self._expr(generator.iter)
-                self._bind(generator.target)
-                for condition in generator.ifs:
-                    self._expr(condition)
-            if isinstance(node, ast.DictComp):
-                self._expr(node.key)
-                self._expr(node.value)
-            else:
-                self._expr(node.elt)
+            with ExitStack() as contexts:
+                for generator in node.generators:
+                    self._expr(generator.iter)
+                    contexts.enter_context(
+                        self._control(
+                            generator.iter,
+                            "loop",
+                            "Comprehension body; static summary; iteration count not observed",
+                        )
+                    )
+                    self._bind(generator.target)
+                    for condition in generator.ifs:
+                        self._expr(condition)
+                if isinstance(node, ast.DictComp):
+                    self._expr(node.key)
+                    self._expr(node.value)
+                else:
+                    self._expr(node.elt)
             self.state = state
             return None
-        for child in ast.iter_child_nodes(node):
-            self.visit(child)
+        if self._collector is None:
+            for child in ast.iter_child_nodes(node):
+                self.visit(child)
+        else:
+            values = [self.visit(child) for child in ast.iter_child_nodes(node)]
+            self._opaque(
+                node,
+                f"{type(node).__name__} result not tracked; tracked operand context only",
+                values,
+            )
         return None
 
     def _method(
@@ -632,6 +735,7 @@ class SparkAnalyzer(ast.NodeVisitor):
             label = f"Built-in {name}(); eager iterator materialization"
         elif (
             value.kind in {"frame", "grouped", "frame_na", "writer", "writer_v2"}
+            or (value.kind in TRACE_KINDS and result is None)
             or has_findings
         ):
             kind = "transform" if result is not None else "opaque"
@@ -880,7 +984,6 @@ class SparkAnalyzer(ast.NodeVisitor):
     ) -> _TrackedValue | None:
         if left is None or right is None or left.value.kind != right.value.kind:
             return None
-        # shortcut: distinct traces have no endpoint until slice 05 adds merge nodes.
         trace = left.trace if left.trace == right.trace else None
         left, right = left.value, right.value
         if left.kind not in {"frame", "grouped", "writer", "writer_v2", "frame_na"}:
@@ -904,15 +1007,57 @@ class SparkAnalyzer(ast.NodeVisitor):
             trace,
         )
 
-    @classmethod
-    def _merge(cls, *states: dict[str, _TrackedValue]) -> dict[str, _TrackedValue]:
+    def _merge_paths(
+        self, node: ast.AST, values, binding: str = ""
+    ) -> _TrackedValue | None:
+        result = values[0]
+        for value in values[1:]:
+            result = self._merge_value(result, value)
+        if self._collector is None:
+            return result
+        if result is not None and all(v.trace == values[0].trace for v in values):
+            return result
+        if not any(v is not None and v.value.kind in TRACE_KINDS for v in values):
+            return result
+        label = "Analyzed alternatives (not a sequence)"
+        if binding:
+            label += f" for {binding}"
+        if any(v is None or v.trace is None for v in values):
+            label += "; some alternatives untracked"
+        if result is None:
+            label += "; result identity not established"
+        trace = self._trace(
+            node,
+            "merge" if result is not None else "opaque",
+            label,
+            None,
+            result.value if result is not None else None,
+            parents=tuple(
+                (v.trace, "alternative")
+                for v in values
+                if v is not None and v.trace is not None
+            ),
+            binding=binding,
+        )
+        return _TrackedValue(result.value, trace) if result is not None else None
+
+    def _merge(
+        self, *states: dict[str, _TrackedValue], node: ast.AST | None = None
+    ) -> dict[str, _TrackedValue]:
         result = states[0].copy()
         for state in states[1:]:
             for name in list(result):
-                value = cls._merge_value(result[name], state.get(name))
+                value = self._merge_value(result[name], state.get(name))
                 if value is None:
                     del result[name]
                 else:
+                    result[name] = value
+        if self._collector is not None and node is not None:
+            for name in sorted(set().union(*states)):
+                value = self._merge_paths(
+                    node, tuple(state.get(name) for state in states), name
+                )
+                if value is not None:
                     result[name] = value
         return result
 
@@ -922,11 +1067,13 @@ class SparkAnalyzer(ast.NodeVisitor):
             self._block(node.body if node.test.value else node.orelse)
             return
         initial = self.state.copy()
-        self._block(node.body)
+        with self._control(node, "merge", "If body; analyzed alternative"):
+            self._block(node.body)
         left = self.state.copy()
         self.state = initial
-        self._block(node.orelse)
-        self.state = self._merge(left, self.state)
+        with self._control(node, "merge", "If else; analyzed alternative"):
+            self._block(node.orelse)
+        self.state = self._merge(left, self.state, node=node)
 
     def _loop(self, node, repetitions: int | None):
         initial = self.state.copy()
@@ -954,7 +1101,10 @@ class SparkAnalyzer(ast.NodeVisitor):
                 else tracked
                 for name, tracked in self.state.items()
             }
-        self._block(node.body)
+        with self._control(
+            node, "loop", "Loop body; static summary; iteration count not observed"
+        ):
+            self._block(node.body)
         if repeated:
             self.loop_ids.pop()
             self.state = {
@@ -972,8 +1122,12 @@ class SparkAnalyzer(ast.NodeVisitor):
                 for name, tracked in self.state.items()
             }
         if repetitions is None or repetitions == 0:
-            self.state = self._merge(initial, self.state)
-        self._block(node.orelse)
+            self.state = self._merge(initial, self.state, node=node)
+        if node.orelse:
+            with self._control(
+                node, "merge", "Loop else; analyzed completion path, not guaranteed"
+            ):
+                self._block(node.orelse)
 
     def visit_For(self, node):
         self._expr(node.iter)
@@ -1044,20 +1198,25 @@ class SparkAnalyzer(ast.NodeVisitor):
             bindings.visit(statement)
         for name in bindings.names - bindings.external:
             self.state.pop(name, None)
-        self._parameters(node.args)
-        loops, targets, class_globals = (
+        loops, targets, class_globals, controls = (
             self.loop_ids,
             self.assignment_targets,
             self.class_globals,
+            self._controls,
         )
-        self.loop_ids, self.assignment_targets, self.class_globals = [], set(), None
-        self._block(node.body)
-        self.state = outer
-        self.loop_ids, self.assignment_targets, self.class_globals = (
-            loops,
-            targets,
-            class_globals,
-        )
+        self._controls = []
+        try:
+            self._parameters(node.args)
+            self.loop_ids, self.assignment_targets, self.class_globals = [], set(), None
+            self._block(node.body)
+        finally:
+            self.state = outer
+            self._controls = controls
+            self.loop_ids, self.assignment_targets, self.class_globals = (
+                loops,
+                targets,
+                class_globals,
+            )
 
     visit_AsyncFunctionDef = visit_FunctionDef
 
@@ -1071,11 +1230,18 @@ class SparkAnalyzer(ast.NodeVisitor):
         outer, class_globals = self.state.copy(), self.class_globals
         self.class_globals = class_globals if class_globals is not None else outer
         self.state = outer.copy()
-        loops, targets = self.loop_ids, self.assignment_targets
-        self.loop_ids, self.assignment_targets = [], set()
-        self._block(node.body)
-        self.state, self.class_globals = outer, class_globals
-        self.loop_ids, self.assignment_targets = loops, targets
+        loops, targets, controls = (
+            self.loop_ids,
+            self.assignment_targets,
+            self._controls,
+        )
+        self.loop_ids, self.assignment_targets, self._controls = [], set(), []
+        try:
+            self._block(node.body)
+        finally:
+            self.state, self.class_globals = outer, class_globals
+            self.loop_ids, self.assignment_targets = loops, targets
+            self._controls = controls
         self.state.pop(node.name, None)
 
     def visit_With(self, node):
@@ -1089,8 +1255,11 @@ class SparkAnalyzer(ast.NodeVisitor):
 
     def visit_Try(self, node):
         initial = self.state.copy()
-        self._block(node.body)
-        self._block(node.orelse)
+        with self._control(
+            node, "merge", "Try body and else; analyzed success alternative"
+        ):
+            self._block(node.body)
+            self._block(node.orelse)
         branches = [self.state.copy()]
         bindings = Bindings()
         for statement in node.body:
@@ -1099,11 +1268,14 @@ class SparkAnalyzer(ast.NodeVisitor):
             self.state = {k: v for k, v in initial.items() if k not in bindings.names}
             if handler.name:
                 self.state.pop(handler.name, None)
-            self._block(handler.body)
+            with self._control(
+                handler, "merge", "Exception handler; conservative analyzed alternative"
+            ):
+                self._block(handler.body)
             if handler.name:
                 self.state.pop(handler.name, None)
             branches.append(self.state.copy())
-        self.state = self._merge(*branches)
+        self.state = self._merge(*branches, node=node)
         self._block(node.finalbody)
 
     visit_TryStar = visit_Try
@@ -1119,8 +1291,11 @@ class SparkAnalyzer(ast.NodeVisitor):
             bindings.visit(case.pattern)
             for name in bindings.names:
                 self.state.pop(name, None)
-            self._expr(case.guard)
-            self._block(case.body)
+            with self._control(
+                case.pattern, "merge", "Match case; analyzed alternative"
+            ):
+                self._expr(case.guard)
+                self._block(case.body)
             branches.append(self.state.copy())
             if (
                 isinstance(case.pattern, ast.MatchAs)
@@ -1128,4 +1303,6 @@ class SparkAnalyzer(ast.NodeVisitor):
                 and case.guard is None
             ):
                 exhaustive = True
-        self.state = self._merge(*(branches if exhaustive else [initial, *branches]))
+        self.state = self._merge(
+            *(branches if exhaustive else [initial, *branches]), node=node
+        )

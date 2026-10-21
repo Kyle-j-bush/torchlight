@@ -323,15 +323,21 @@ class LinearTraceTests(unittest.TestCase):
         self.assertIsNone(unbounded.nodes[-1].before.row_limit)
         self.assertEqual(bounded.nodes[-1].before.row_limit, 1)
 
-    def test_missing_merge_trace_is_labeled_without_fabricated_edges(self):
+    def test_divergent_trace_uses_alternatives_without_fabricated_sequences(self):
         findings, graph, _ = self.capture(
             SETUP
             + "if condition:\n    result = df.limit(1)\nelse:\n    result = df\nresult.collect()\n"
         )
         self.assertEqual([f.rule_id for f in findings], ["TL001"])
         action = graph.nodes[-1]
-        self.assertIn("prior trace unavailable", action.label)
-        self.assertFalse(any(e.target == action.id for e in graph.edges))
+        merge = graph.nodes[-2]
+        self.assertEqual(merge.kind, "merge")
+        self.assertIn("Analyzed alternatives (not a sequence)", merge.label)
+        self.assertEqual(
+            [e.relation for e in graph.edges if e.target == merge.id],
+            ["alternative", "alternative"],
+        )
+        self.assertIn(GraphEdge(merge.id, action.id, "receiver"), graph.edges)
 
     def test_plugin_anchors_follow_last_diagnostic_without_inventing_plugin_edges(self):
         detector = Mock(rule_id="LOCAL001")

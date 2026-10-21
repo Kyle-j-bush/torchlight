@@ -347,7 +347,12 @@ class GraphTests(unittest.TestCase):
                 "df.coalesce(1).write.mode('overwrite').parquet('out')\n"
                 "df.repartition(1).writeTo('target').create()\n"
                 "for column in columns:\n    df = df.withColumn(column, expr)\n"
-                "def job(events: DataFrame):\n    events.collect()\n",
+                "def job(events: DataFrame):\n    events.collect()\n"
+                "if condition:\n    bounded = df.limit(1)\nelse:\n    bounded = df.limit(2)\n"
+                "branch = df if condition else df\ncondition and (alias := df)\n"
+                "try:\n    bounded = df.limit(1)\nexcept Exception:\n    bounded = df.limit(2)\n"
+                "match item:\n    case _:\n        bounded = df.limit(1)\n"
+                "result = custom(df)\n[df.count() for item in items]\n",
                 encoding="utf-8",
             )
             with contextlib.ExitStack() as stack:

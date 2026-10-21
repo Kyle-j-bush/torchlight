@@ -1,10 +1,10 @@
 # RiskMap implementation contract
 
-Status: internal foundations only, not a shipped feature. Slices 01–04 add
+Status: internal foundations only, not a shipped feature. Slices 01–05 add
 preservation tests, stacked-review CI, and an immutable graph model with a bounded
-collector, private tracked analyzer state, and opt-in internal linear trace capture.
-Ordinary scans do not allocate graph records. Control-flow capture, notebook
-plumbing, public graph APIs, and HTML/graph-JSON formats are still planned; they
+collector, private tracked analyzer state, and opt-in internal linear/control-flow
+trace capture. Ordinary scans do not allocate graph records. Notebook plumbing,
+public graph APIs, and HTML/graph-JSON formats are still planned; they
 are not available in v0.8.0. No release version changes until release readiness.
 
 ## Product boundary
@@ -142,14 +142,14 @@ graph allocation is added to ordinary scans in this slice.
 `SparkAnalyzer` now keeps immutable `_TrackedValue(value, trace)` pairs in its
 private state and expression results, including imports, annotations, aliases,
 attributes, scope snapshots, and loop tagging. `trace` is an optional node ID;
-ordinary scans keep it `None`, and this slice creates no graph records. Detectors
+ordinary scans keep it `None`, and slice 03 created no graph records. Detectors
 and version-1 plugins still receive the original plain `Value` inside `CallFacts`.
 
 Merges compare semantic values, never wrapper equality. Existing bounds,
 single-partition evidence, origins, and loop-token rules stay unchanged even
 when equal facts carry different trace endpoints. Shared endpoints survive;
-distinct endpoints become `None` until slice 05 introduces explicit alternative
-nodes. Unknown results still lose identity without clearing known receiver
+distinct endpoints became `None` in slice 03; slice 05 now captures explicit
+alternative nodes. Unknown results still lose identity without clearing known receiver
 bindings. `forget()` clears both facts and private endpoints between opaque cells.
 Default-scan timing is recorded in [the performance log](../../benchmarks/performance.md).
 
@@ -177,10 +177,45 @@ Each emitted diagnostic gets a pre-policy operation anchor, including plugins
 and last-diagnostic-wins collisions. Capture limits never drop findings or change
 plugin facts/errors. Unsupported frame receiver methods/attributes produce opaque
 endpoints without granting identity to their result. Missing prior endpoints are
-labeled rather than connected to a guessed path. Full free-call/control-flow
-boundaries and alternatives/loop context remain later work; TL003 can currently
-anchor to its transform but has no loop-summary node. Notebook invalidation,
+labeled rather than connected to a guessed path. Slice 05 extends these boundaries
+to free calls and control flow and adds alternatives/loop context. Notebook invalidation,
 scanner filtering, report-local finding IDs, and public rendering remain deferred.
+
+### Control-flow capture (slice 05)
+
+Nonconstant `if`/conditional expressions, boolean continuations, try/else/handlers,
+and match cases carry explicit analyzed control context. Divergent bindings and
+conditional results meet at a node with `alternative` edges, never a fabricated
+receiver sequence. Equal semantic facts still get alternatives when their
+endpoints differ; shared endpoints need no extra merge. Merged facts use the
+existing bound, partition, origin, and loop-token rules. Unknown or incompatible
+paths produce an opaque boundary with no tracked result. Missing endpoints are
+disclosed; no guessed edge fills the gap. Boundaries remain captured even without
+a downstream finding.
+
+For/async-for/while and comprehension bodies have static loop-summary context.
+TL003 stays anchored to the repeated transform, connected to the active loop by
+control edges. Nested loops remain nested; summaries have no back edges, unrolled
+paths, or observed iteration counts. Unknown-loop entry/body state merges preserve
+the existing zero-body alternative. Literal dead branches and zero-body loops
+remain unvisited. Loop `else` is labeled as an analyzed completion path, not a
+guaranteed execution. Function/lambda/class analysis isolates and restores control
+context alongside the existing scope rules; defaults/decorators stay in their
+outer context, and comprehension targets do not leak.
+
+Unrecognized calls receiving directly tracked arguments, unsupported expressions,
+and unsupported Spark receiver methods/attributes expose a stopping point without
+making their result Spark-like or changing independent input bindings. Argument
+and operand links are labeled context only and use `control`, not receiver lineage
+or alternatives between distinct inputs. Wildcard imports record invalidation
+before clearing bindings. No raw argument text is added to labels.
+
+This is not a new reachability engine: exception handlers retain the existing
+conservative invalidation of names written in the try body, `except*` retains the
+existing alternative-state approximation, boolean result types remain unknown,
+and direct return/raise/break/continue stops use the existing block traversal.
+There is no interprocedural inference, loop fixed point, or claim that all
+analyzed paths can execute. Notebook invalidation boundaries remain slice 06.
 
 ### Scanner integration and comparison
 
