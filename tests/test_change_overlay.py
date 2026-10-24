@@ -220,6 +220,40 @@ class ChangeOverlayTests(GitRepository):
             all(change.label == "unknown" for change in report.graph.changes)
         )
 
+    def test_current_budget_truncation_does_not_hide_duplicate_ambiguity(self):
+        other = self.write("other.py", BASE_FACTS)
+        self.commit_base(BASE_FACTS)
+        self.path.write_text(CURRENT_FACTS + "df.collect()\n", encoding="utf-8")
+        other.write_text(CURRENT_FACTS, encoding="utf-8")
+        calls = []
+
+        def collector(artifact):
+            calls.append(artifact.path)
+            return _GraphCollector(
+                artifact, max_records=6 if len(calls) == 1 else 10_000
+            )
+
+        with patch("torchlight.scanner._GraphCollector", new=collector):
+            report = self.scan()
+
+        self.assertEqual(report.errors, ())
+        self.assertEqual(len(report.findings), 3)
+        self.assertEqual(len(calls), 4)
+        self.assertFalse(report.graph.capture_complete)
+        self.assertTrue(report.graph.comparison.base_capture_complete)
+        self.assertIsNotNone(report.graph.links[0].node_id)
+        self.assertIsNone(report.graph.links[1].node_id)
+        self.assertIsNotNone(report.graph.links[2].node_id)
+        self.assertTrue(report.graph.changes)
+        truncated = report.graph.limits[0].artifact_id
+        nodes = {node.id: node for node in report.graph.nodes}
+        for change in report.graph.changes:
+            if nodes[change.node_id].artifact_id == truncated:
+                self.assertEqual(change.label, "unknown")
+                self.assertIsNone(change.base_before)
+            else:
+                self.assertEqual(change.label, "matched")
+
     def test_unavailable_base_source_is_unknown(self):
         self.write("notes.txt", SOURCE)
         self.commit()

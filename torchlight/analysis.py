@@ -359,6 +359,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         *,
         parents: tuple[tuple[str, EdgeRelation], ...] = (),
         binding: str = "",
+        structural_key: str | None = None,
     ) -> str | None:
         if self._collector is None:
             return None
@@ -372,7 +373,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         return self._collector.add_node(
             kind,
             label,
-            structural_key=call_key(node, self.parents)
+            structural_key=(structural_key or call_key(node, self.parents))
             + (f":{binding}" if binding else ""),
             location=self._location(node),
             parents=parents,
@@ -715,7 +716,9 @@ class SparkAnalyzer(ast.NodeVisitor):
         result = self._method_result(tracked, name, node)
         if self._collector is not None:
             emitted = self.findings[start:]
-            trace = self._trace_call(node, facts, tracked, result, bool(emitted))
+            trace = self._trace_call(
+                node, facts, tracked, result, emitted[0] if emitted else None
+            )
             for finding in emitted:
                 self._collector.anchor(finding.rule_id, finding.location, trace)
             if result is not None:
@@ -728,7 +731,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         facts: CallFacts,
         tracked: _TrackedValue,
         result: _TrackedValue | None,
-        has_findings: bool,
+        finding: Finding | None,
     ) -> str | None:
         value, name = facts.receiver, facts.method
         label = f".{name}()"
@@ -752,7 +755,7 @@ class SparkAnalyzer(ast.NodeVisitor):
         elif (
             value.kind in {"frame", "grouped", "frame_na", "writer", "writer_v2"}
             or (value.kind in TRACE_KINDS and result is None)
-            or has_findings
+            or finding is not None
         ):
             kind = "transform" if result is not None else "opaque"
             if result is not None and name in {
@@ -775,7 +778,12 @@ class SparkAnalyzer(ast.NodeVisitor):
         }:
             label += "; receiver path only; other inputs untracked"
         return self._trace(
-            node, kind, label, tracked, result.value if result is not None else None
+            node,
+            kind,
+            label,
+            tracked,
+            result.value if result is not None else None,
+            structural_key=finding.structural_key if finding is not None else None,
         )
 
     def _method_result(

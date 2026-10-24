@@ -105,3 +105,46 @@ scan regression, nor do they isolate the wrapper's allocation cost. Repeat on
 quiet hardware before making performance claims. This remains warm-cache,
 synthetic scan timing, not a CI gate; rendering, cold caches, peak memory,
 graph-enabled overhead, and production performance were not measured.
+
+## RiskMap checkpoint follow-up (2026-10-24)
+
+The slice-08 follow-up removes duplicate call-syntax serialization between a
+finding and its trace, without caching ASTs or changing graph IDs. A separate
+correctness fix makes matches unknown when current-artifact truncation could hide
+duplicate operations. No collector limit or validation was weakened.
+
+Using CPython 3.14.8 on macOS 27.0.1 arm64, the existing `generate(root, 100, 8)`
+workload from `scripts/benchmark_scan.py` supplied the same 300 files and 7,200
+findings. Each run alternated `Scanner.scan(root, use_baseline=False,
+include_graph=enabled)` in false/true then true/false order, discarding the first
+pair and keeping seven samples per mode. Generation, hashing, and snapshot
+comparison were outside the timer. The updated run was bracketed by two runs of
+checkpoint `dfb8631`, extracted into a temporary directory. No other Torchlight
+checks ran concurrently.
+
+- Checkpoint tool digest: `bde547e5d6e1f8b53db229c51910daa44d47ffab74206827f20b18f5fcae4af2`.
+- Follow-up tool digest: `aa43732a101061ae7878011f6bc39b613646bd84de8ea75e67b1559c2d82221b`.
+- Shared corpus digest: `cbba51e93175bcec0cec8812ad481da39704c3794e1df96a3401f5277c49f3be`.
+
+| Run | Disabled median seconds | Enabled median seconds | Enabled/disabled |
+| --- | --- | --- | --- |
+| Checkpoint A | 0.319220 | 0.634391 | 1.99× |
+| Follow-up | 0.325745 | 0.584999 | 1.80× |
+| Checkpoint B | 0.321497 | 0.636007 | 1.98× |
+
+```text
+Checkpoint A disabled: 0.355856, 0.335634, 0.318602, 0.315278, 0.334476, 0.319220, 0.318631
+Checkpoint A enabled:  0.726942, 0.660463, 0.634391, 0.628414, 0.627071, 0.624115, 0.655911
+Follow-up disabled:    0.325745, 0.342877, 0.328356, 0.321612, 0.321434, 0.326548, 0.323188
+Follow-up enabled:     0.605146, 0.591381, 0.583263, 0.584999, 0.578984, 0.577049, 0.607410
+Checkpoint B disabled: 0.324034, 0.321497, 0.343747, 0.318423, 0.320589, 0.319833, 0.322014
+Checkpoint B enabled:  0.655346, 0.641974, 0.636007, 0.632367, 0.625608, 0.620610, 0.654948
+```
+
+Every scan checked finding counts and errors; enabled scans also checked complete
+capture and 7,200 final links. Finding and graph snapshots were identical across
+the checkpoint and follow-up on this workload. The enabled median was about 8%
+lower than the bracketing checkpoint runs, but **the 1.25× engineering target is
+still unmet**. These warm-cache synthetic observations on an uncontrolled machine
+are not production speed claims or CI thresholds. Base-comparison timing,
+rendering, cold caches, allocation peaks, and process RSS were not measured.

@@ -326,7 +326,9 @@ Matching uses `GraphNode.key` and occurrence counts within the current artifact'
 mapped base artifact. Exactly one current and one base node with the same key is
 `matched`; duplicate keys that make a match ambiguous, any incomplete base graph,
 an unavailable base source, or a base error is `unknown`; a key absent from a
-complete base graph is `new-or-edited`. Added files are `new-or-edited`.
+complete base graph is `new-or-edited`. Truncated current capture can hide duplicate
+occurrences, so compared existing artifacts also become `unknown` when their
+current capture is incomplete. Added files remain `new-or-edited`.
 `matched` means syntax identity only, not semantic equivalence. Rename mapping
 comes from existing Git comparison; cell and line shifts do not affect keys.
 
@@ -341,6 +343,10 @@ describes only current budget status; base incompleteness is separate.
 
 No graph JSON or HTML is added in this slice. Finding subtraction, legacy renders,
 and `to_dict()` schema 1 are unchanged.
+
+Finding-backed traces reuse the finding's structural key instead of serializing
+the same AST twice. The [paired timing observation](../../benchmarks/performance.md#riskmap-checkpoint-follow-up-2026-10-24)
+records the improvement and the still-unmet graph-enabled timing target.
 
 ## Planned public surface
 

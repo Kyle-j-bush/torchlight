@@ -76,6 +76,8 @@ count-based finding subtraction.
 - A unique structural key on both sides is matched. An absent key in a complete
   base graph is new or edited. Duplicate keys that make a match ambiguous, any
   incomplete base graph, base errors, and unavailable base source are `unknown`.
+  Existing artifacts with truncated current capture also become `unknown`, since
+  missing operations can hide duplicates. Known added files remain new or edited.
 - Matched changes retain base coordinates and facts. For example, a prior
   `limit(1000)` bound can remain attached to an unchanged current `df.collect()`.
 - Renames use the same merge-base mapping as finding subtraction; cell and line

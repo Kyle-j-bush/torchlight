@@ -359,6 +359,7 @@ def _finding_id(
 def _node_changes(
     artifacts: tuple[GraphArtifact, ...],
     nodes: tuple[GraphNode, ...],
+    limits: tuple[CaptureLimit, ...],
     captures: Mapping[str, BaseCapture],
     comparison: GraphComparison | None,
 ) -> dict[str, NodeChange]:
@@ -368,6 +369,7 @@ def _node_changes(
     nodes_by_artifact: dict[str, list[GraphNode]] = {}
     for node in nodes:
         nodes_by_artifact.setdefault(node.artifact_id, []).append(node)
+    truncated = {limit.artifact_id for limit in limits}
 
     changes: dict[str, NodeChange] = {}
     for artifact in artifacts:
@@ -387,7 +389,11 @@ def _node_changes(
             )
             continue
         base_graph = capture.graph
-        if base_graph is None or not base_graph.capture_complete:
+        if (
+            base_graph is None
+            or not base_graph.capture_complete
+            or artifact.id in truncated
+        ):
             changes.update(
                 (node.id, NodeChange(node.id, "unknown")) for node in artifact_nodes
             )
@@ -436,7 +442,7 @@ def report_graph(
     nodes = tuple(node for graph in graphs for node in graph.nodes)
     edges = tuple(edge for graph in graphs for edge in graph.edges)
     limits = tuple(limit for graph in graphs for limit in graph.limits)
-    changes = _node_changes(artifacts, nodes, bases or {}, comparison)
+    changes = _node_changes(artifacts, nodes, limits, bases or {}, comparison)
     anchors = {
         (anchor.artifact_id, anchor.rule_id, anchor.location): anchor
         for graph in graphs

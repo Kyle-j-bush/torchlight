@@ -5,11 +5,12 @@ import json
 import unittest
 from dataclasses import asdict
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from torchlight.analysis import SparkAnalyzer, parse_source
 from torchlight.diagnostics import Location, Rule
 from torchlight.graph import GraphArtifact, GraphEdge, GraphFacts, _GraphCollector
+from torchlight.identity import call_key
 from torchlight.plugins import Diagnostic, Plugin, PluginError, Value
 
 SETUP = (
@@ -306,6 +307,12 @@ class LinearTraceTests(unittest.TestCase):
             "\n# shifted\n" + source.replace("collect()", "collect( )")
         )[1]
         self.assertEqual([n.id for n in graph.nodes], [n.id for n in shifted.nodes])
+
+    def test_finding_and_trace_reuse_the_same_structural_key(self):
+        with patch("torchlight.analysis.call_key", wraps=call_key) as keys:
+            findings, graph, _ = self.capture(SETUP + "df.collect()\n")
+        self.assertEqual([finding.rule_id for finding in findings], ["TL001"])
+        self.assertEqual(keys.call_count, len(graph.nodes))
 
     def test_matching_roles_and_keys_do_not_depend_on_incoming_bounds(self):
         graphs = [

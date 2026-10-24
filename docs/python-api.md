@@ -79,7 +79,8 @@ The CLI retains its documented working-directory discovery.
   ambiguous duplicate syntax, unavailable or incomplete base source, and base
   errors become `unknown`, never confident unchanged labels. `matched` means
   syntax identity, not semantic equivalence. This overlay never changes finding
-  subtraction.
+  subtraction. For existing artifacts, current capture truncation also makes
+  nodes `unknown`, because missing operations can hide duplicate matches.
   Graph records are pre-1.0 internal types, and no graph output format is
   available yet. Graph capture never changes findings, errors, `to_dict()`, or
   the legacy renders.
