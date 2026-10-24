@@ -74,6 +74,12 @@ The CLI retains its documented working-directory discovery.
   default is `False`; ordinary scans allocate no graph records. The flag must be
   a bool and is validated before source I/O. `graph` is `None` unless requested
   and an empty graph when capture was requested but no artifact was retained.
+  With `changed_from`, graph capture also compares merge-base operations and adds
+  `graph.comparison` plus per-node `graph.changes`. Labels are conservative:
+  ambiguous duplicate syntax, unavailable or incomplete base source, and base
+  errors become `unknown`, never confident unchanged labels. `matched` means
+  syntax identity, not semantic equivalence. This overlay never changes finding
+  subtraction.
   Graph records are pre-1.0 internal types, and no graph output format is
   available yet. Graph capture never changes findings, errors, `to_dict()`, or
   the legacy renders.

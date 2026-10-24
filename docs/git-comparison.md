@@ -47,6 +47,8 @@ raise SystemExit(report.exit_code)
 - Comments, formatting, line shifts, and notebook cell insertions do not change
   structural identity. Matching consumes counts: an additional identical call is
   new, but replacing one identical call with another is not distinguishable.
+  The opt-in graph overlay is stricter: duplicate structural keys that make a
+  match ambiguous are `unknown`, not confidently matched.
 - Deleted files produce no current findings. Explicitly named deleted/renamed
   old files are skipped; other missing inputs remain errors.
 - Notebooks retain complete document-order state on each side. Unchanged
@@ -59,6 +61,28 @@ raise SystemExit(report.exit_code)
 - Unchanged files are not analyzed, even if they contain existing syntax errors.
   This is not cross-file analysis, a full-repository health check, or a proof of
   safety. Changes to policy alone do not trigger reanalysis of unchanged source.
+
+## Graph change overlay
+
+`include_graph=True` also captures base operations and adds
+`report.graph.comparison` and `report.graph.changes`. This is separate from
+count-based finding subtraction.
+
+- `comparison` records the requested ref, resolved merge base, whether base
+  capture was complete, and that current source is the working tree.
+- Each retained current node gets `matched`, `new-or-edited`, `unknown`, or
+  `not-compared`. `matched` means structural syntax identity only; it does not
+  establish semantic equivalence.
+- A unique structural key on both sides is matched. An absent key in a complete
+  base graph is new or edited. Duplicate keys that make a match ambiguous, any
+  incomplete base graph, base errors, and unavailable base source are `unknown`.
+- Matched changes retain base coordinates and facts. For example, a prior
+  `limit(1000)` bound can remain attached to an unchanged current `df.collect()`.
+- Renames use the same merge-base mapping as finding subtraction; cell and line
+  shifts do not affect structural keys. Matching happens before pruning to
+  finding-centered paths.
+
+No graph JSON or HTML output format is available yet.
 
 ## Errors and read-only operation
 

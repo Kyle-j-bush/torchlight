@@ -6,7 +6,7 @@
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, get_args
 
@@ -17,6 +17,8 @@ type NodeKind = Literal[
     "source", "transform", "constraint", "action", "sink", "merge", "loop", "opaque"
 ]
 type EdgeRelation = Literal["receiver", "alternative", "control"]
+type ChangeLabel = Literal["matched", "new-or-edited", "unknown", "not-compared"]
+type BaseStatus = Literal["added", "analyzed", "unknown"]
 
 
 def _digest(parts: list[str]) -> str:
@@ -108,6 +110,43 @@ class FindingLink:
 
 
 @dataclass(frozen=True)
+class GraphComparison:
+    """Requested Git comparison and its resolved base, without rereading source."""
+
+    requested_ref: str
+    merge_base: str
+    base_capture_complete: bool = True
+    current_source: Literal["working-tree"] = "working-tree"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.requested_ref, str) or not self.requested_ref:
+            raise ValueError("requested_ref must be a nonempty string")
+        if not isinstance(self.merge_base, str) or not self.merge_base:
+            raise ValueError("merge_base must be a nonempty string")
+        if type(self.base_capture_complete) is not bool:
+            raise ValueError("base_capture_complete must be a bool")
+        if self.current_source != "working-tree":
+            raise ValueError("current_source must be 'working-tree'")
+
+
+@dataclass(frozen=True)
+class NodeChange:
+    """Conservative change state for one current node; base facts may be absent."""
+
+    node_id: str
+    label: ChangeLabel
+    base_location: Location | None = None
+    base_before: GraphFacts | None = None
+    base_after: GraphFacts | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.node_id, str) or not self.node_id:
+            raise ValueError("node change requires a nonempty node ID")
+        if self.label not in get_args(ChangeLabel.__value__):
+            raise ValueError(f"unsupported change label: {self.label}")
+
+
+@dataclass(frozen=True)
 class CaptureLimit:
     artifact_id: str
     max_records: int
@@ -124,11 +163,25 @@ class AnalysisGraph:
     edges: tuple[GraphEdge, ...] = ()
     anchors: tuple[FindingAnchor, ...] = ()
     links: tuple[FindingLink, ...] = ()
+    changes: tuple[NodeChange, ...] = ()
     limits: tuple[CaptureLimit, ...] = ()
+    comparison: GraphComparison | None = None
 
     def __post_init__(self) -> None:
-        for name in ("artifacts", "nodes", "edges", "anchors", "links", "limits"):
+        for name in (
+            "artifacts",
+            "nodes",
+            "edges",
+            "anchors",
+            "links",
+            "changes",
+            "limits",
+        ):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+        if self.comparison is not None and not isinstance(
+            self.comparison, GraphComparison
+        ):
+            raise TypeError("comparison must be a GraphComparison or None")
         artifacts = {artifact.id for artifact in self.artifacts}
         nodes = {node.id: node for node in self.nodes}
         if len(artifacts) != len(self.artifacts) or len(nodes) != len(self.nodes):
@@ -167,6 +220,13 @@ class AnalysisGraph:
                 or nodes[link.node_id].artifact_id != link.artifact_id
             ):
                 raise ValueError("finding link references an unknown or foreign node")
+        changed_nodes = set()
+        for change in self.changes:
+            if change.node_id in changed_nodes:
+                raise ValueError("node changes must be unique")
+            changed_nodes.add(change.node_id)
+            if change.node_id not in nodes:
+                raise ValueError("node change references an unknown node")
         if len({limit.artifact_id for limit in self.limits}) != len(self.limits):
             raise ValueError("capture limits must be unique per artifact")
         if any(limit.artifact_id not in artifacts for limit in self.limits):
@@ -176,6 +236,23 @@ class AnalysisGraph:
     def capture_complete(self) -> bool:
         """Only describes budget truncation, not analysis coverage or Spark safety."""
         return not self.limits
+
+
+@dataclass(frozen=True)
+class BaseCapture:
+    """Internal scanner result for one current artifact's base revision."""
+
+    path: str
+    status: BaseStatus
+    graph: AnalysisGraph | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.path, str) or not self.path:
+            raise ValueError("base capture path must be a nonempty string")
+        if self.status not in get_args(BaseStatus.__value__):
+            raise ValueError(f"unsupported base status: {self.status}")
+        if (self.status == "analyzed") != (self.graph is not None):
+            raise ValueError("analyzed base capture requires exactly one graph")
 
 
 class _GraphCollector:
@@ -279,8 +356,79 @@ def _finding_id(
     )
 
 
+def _node_changes(
+    artifacts: tuple[GraphArtifact, ...],
+    nodes: tuple[GraphNode, ...],
+    captures: Mapping[str, BaseCapture],
+    comparison: GraphComparison | None,
+) -> dict[str, NodeChange]:
+    if comparison is None:
+        return {node.id: NodeChange(node.id, "not-compared") for node in nodes}
+
+    nodes_by_artifact: dict[str, list[GraphNode]] = {}
+    for node in nodes:
+        nodes_by_artifact.setdefault(node.artifact_id, []).append(node)
+
+    changes: dict[str, NodeChange] = {}
+    for artifact in artifacts:
+        artifact_nodes = nodes_by_artifact.get(artifact.id, [])
+        if not artifact_nodes:
+            continue
+        capture = captures.get(artifact.path)
+        if capture is None or capture.status == "unknown":
+            changes.update(
+                (node.id, NodeChange(node.id, "unknown")) for node in artifact_nodes
+            )
+            continue
+        if capture.status == "added":
+            changes.update(
+                (node.id, NodeChange(node.id, "new-or-edited"))
+                for node in artifact_nodes
+            )
+            continue
+        base_graph = capture.graph
+        if base_graph is None or not base_graph.capture_complete:
+            changes.update(
+                (node.id, NodeChange(node.id, "unknown")) for node in artifact_nodes
+            )
+            continue
+
+        base_by_key: dict[str, list[GraphNode]] = {}
+        for base_node in base_graph.nodes:
+            base_by_key.setdefault(base_node.key, []).append(base_node)
+        current_by_key: dict[str, list[GraphNode]] = {}
+        for node in artifact_nodes:
+            current_by_key.setdefault(node.key, []).append(node)
+
+        for key, current_nodes in current_by_key.items():
+            base_nodes = base_by_key.get(key, [])
+            if len(base_nodes) == 1 and len(current_nodes) == 1:
+                base_node = base_nodes[0]
+                changes[current_nodes[0].id] = NodeChange(
+                    current_nodes[0].id,
+                    "matched",
+                    base_node.location,
+                    base_node.before,
+                    base_node.after,
+                )
+            elif not base_nodes:
+                changes.update(
+                    (node.id, NodeChange(node.id, "new-or-edited"))
+                    for node in current_nodes
+                )
+            else:
+                changes.update(
+                    (node.id, NodeChange(node.id, "unknown")) for node in current_nodes
+                )
+    return changes
+
+
 def report_graph(
-    graphs: Iterable[AnalysisGraph], findings: Iterable[Finding]
+    graphs: Iterable[AnalysisGraph],
+    findings: Iterable[Finding],
+    *,
+    bases: Mapping[str, BaseCapture] | None = None,
+    comparison: GraphComparison | None = None,
 ) -> AnalysisGraph:
     """Link already-filtered findings and prune to their paths plus boundaries."""
     graphs = tuple(graphs)
@@ -288,6 +436,7 @@ def report_graph(
     nodes = tuple(node for graph in graphs for node in graph.nodes)
     edges = tuple(edge for graph in graphs for edge in graph.edges)
     limits = tuple(limit for graph in graphs for limit in graph.limits)
+    changes = _node_changes(artifacts, nodes, bases or {}, comparison)
     anchors = {
         (anchor.artifact_id, anchor.rule_id, anchor.location): anchor
         for graph in graphs
@@ -341,5 +490,7 @@ def report_graph(
         nodes=tuple(n for n in nodes if n.id in kept),
         edges=tuple(e for e in edges if e.source in kept and e.target in kept),
         links=tuple(links),
+        changes=tuple(changes[node.id] for node in nodes if node.id in kept),
         limits=tuple(limit for limit in limits if limit.artifact_id in artifact_ids),
+        comparison=comparison,
     )

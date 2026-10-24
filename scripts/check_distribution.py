@@ -59,6 +59,20 @@ report = Scanner(Config(root=Path.cwd(), assume_sessions=('spark',))).scan(
 assert report.exit_code == 1 and not report.errors
 assert len(report.findings) == 1
 assert 'toPandas' in report.findings[0].message
+captured = Scanner(Config(root=Path.cwd(), assume_sessions=('spark',))).scan(
+    'job.py', changed_from='HEAD', include_graph=True
+)
+assert captured.to_dict() == report.to_dict()
+assert captured.graph is not None
+comparison = captured.graph.comparison
+assert comparison.requested_ref == 'HEAD'
+assert comparison.merge_base and comparison.base_capture_complete
+assert comparison.current_source == 'working-tree'
+assert len(captured.graph.links) == 1 and captured.graph.links[0].node_id
+changed = {
+    change.node_id: change.label for change in captured.graph.changes
+}
+assert changed[captured.graph.links[0].node_id] == 'new-or-edited'
 """
 SOURCE_EXPORT_API_CHECK = """
 from pathlib import Path

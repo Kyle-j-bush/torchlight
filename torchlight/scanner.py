@@ -13,7 +13,15 @@ from torchlight.config import Config
 from torchlight.diagnostics import Finding
 from torchlight.files import SOURCE_SUFFIXES, iter_source_files, scan_file, scan_source
 from torchlight.git import GitComparison, GitError
-from torchlight.graph import AnalysisGraph, GraphArtifact, _GraphCollector, report_graph
+from torchlight.graph import (
+    AnalysisGraph,
+    BaseCapture,
+    BaseStatus,
+    GraphArtifact,
+    GraphComparison,
+    _GraphCollector,
+    report_graph,
+)
 from torchlight.identity import project_path
 from torchlight.reporting import render
 
@@ -122,6 +130,7 @@ class Scanner:
         findings: list[Finding] = []
         errors: list[str] = []
         graphs: list[AnalysisGraph] = []
+        base_captures: dict[str, BaseCapture] = {}
         seen: set[Path] = set()
 
         def discovery_error(exc: OSError) -> None:
@@ -185,6 +194,8 @@ class Scanner:
                         graphs.append(collector.build())
                     errors.extend(file_errors)
                     if comparison is not None:
+                        base_status: BaseStatus = "unknown"
+                        base_graph = None
                         try:
                             previous_source = comparison.changes[name]
                             previous_path = (
@@ -199,18 +210,31 @@ class Scanner:
                                 and not self.config.is_excluded(previous_path)
                                 else None
                             )
-                            if source is not None:
+                            if previous_source is None:
+                                base_status = "added"
+                            elif source is not None:
+                                base_collector = (
+                                    _GraphCollector(
+                                        GraphArtifact(str(previous_path), "python")
+                                    )
+                                    if include_graph
+                                    else None
+                                )
                                 previous, previous_errors = scan_source(
                                     previous_path,
                                     source,
                                     assume_sessions=self.config.assume_sessions,
                                     plugins=self.config.plugins,
+                                    _collector=base_collector,
                                 )
                                 errors.extend(
                                     f"Git base {comparison.base[:12]}: {error}"
                                     for error in previous_errors
                                 )
                                 if not previous_errors:
+                                    if base_collector is not None:
+                                        base_status = "analyzed"
+                                        base_graph = base_collector.build()
                                     counts = Counter(
                                         (f.rule_id, f.fingerprint) for f in previous
                                     )
@@ -224,6 +248,10 @@ class Scanner:
                                     file_findings = introduced
                         except GitError as exc:
                             errors.append(f"{file}: Git comparison error: {exc}")
+                        if include_graph:
+                            base_captures[str(file)] = BaseCapture(
+                                str(file), base_status, base_graph
+                            )
                     findings.extend(
                         f
                         for f in file_findings
@@ -235,5 +263,23 @@ class Scanner:
         if baseline is not None:
             findings = new_findings(findings, baseline, self.config.root)
         if include_graph:
-            graph = report_graph(graphs, findings)
+            comparison_meta = None
+            if comparison is not None and changed_from is not None:
+                current_paths = {
+                    artifact.path for graph in graphs for artifact in graph.artifacts
+                }
+                base_complete = current_paths <= base_captures.keys() and all(
+                    capture.status != "unknown"
+                    and (capture.graph is None or capture.graph.capture_complete)
+                    for capture in base_captures.values()
+                )
+                comparison_meta = GraphComparison(
+                    changed_from, comparison.base, base_complete
+                )
+            graph = report_graph(
+                graphs,
+                findings,
+                bases=base_captures,
+                comparison=comparison_meta,
+            )
         return ScanReport(tuple(findings), tuple(errors), self.config.root, graph=graph)

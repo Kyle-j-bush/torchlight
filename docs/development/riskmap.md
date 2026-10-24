@@ -1,12 +1,13 @@
 # RiskMap implementation contract
 
-Status: pre-release foundations only, not a shipped feature. Slices 01–07 add
+Status: pre-release foundations only, not a shipped feature. Slices 01–08 add
 preservation tests, stacked-review CI, an immutable graph model with a bounded
 collector, private tracked analyzer state, opt-in internal linear/control-flow
-trace capture and file/blob notebook plumbing with invalidation boundaries, and an
-opt-in public report graph. Ordinary scans do not allocate graph records. Graph
-JSON and HTML output formats are still planned; they are not available in v0.8.0.
-No release version changes until release readiness.
+trace capture and file/blob notebook plumbing with invalidation boundaries, an
+opt-in public report graph, and a conservative Git-base change overlay. Ordinary
+scans do not allocate graph records. Graph JSON and HTML output formats are still
+planned; they are not available in v0.8.0. No release version changes until
+release readiness.
 
 ## Product boundary
 
@@ -285,8 +286,9 @@ from the working tree, not necessarily HEAD. Never reread source while rendering
 
 `Scanner.scan(..., include_graph=False)` validates the flag as a bool before
 source I/O. When enabled, one fresh collector is created per current artifact and
-the existing `scan_file`/`scan_source` paths resolve its source kind; base-revision
-comparison scans do not capture. Default and explicit opt-out scans allocate no
+the existing `scan_file`/`scan_source` paths resolve its source kind. Base-revision
+capture is added by the slice-08 overlay only when `include_graph` and
+`changed_from` are both active. Default and explicit opt-out scans allocate no
 collector or graph records. `ScanReport.graph` is a keyword-only immutable
 `AnalysisGraph | None`; it is `None` unless requested and an empty graph when
 capture was requested but no artifact was retained, including early configuration,
@@ -310,11 +312,42 @@ Errors remain in `ScanReport.errors`; capture completeness still describes budge
 status only. Legacy renders and `to_dict()` schema 1 are unchanged. Graph JSON and
 HTML remain slices 09–10.
 
+### Git change overlay (slice 08)
+
+When `include_graph=True` and `changed_from` is active, each changed current
+artifact also gets one fresh collector for its merge-base blob. Base scans use the
+same current policy and capture recognized safe operations as well as finding
+anchors, because a base bound can explain a current finding. Base parsing,
+suppression, plugin, blob-read, unavailable-source, and budget failures remain
+visible through `report.errors`, `GraphComparison.base_capture_complete`, and
+conservative labels; they never alter finding subtraction.
+
+Matching uses `GraphNode.key` and occurrence counts within the current artifact's
+mapped base artifact. Exactly one current and one base node with the same key is
+`matched`; duplicate keys that make a match ambiguous, any incomplete base graph,
+an unavailable base source, or a base error is `unknown`; a key absent from a
+complete base graph is `new-or-edited`. Added files are `new-or-edited`.
+`matched` means syntax identity only, not semantic equivalence. Rename mapping
+comes from existing Git comparison; cell and line shifts do not affect keys.
+
+Every retained current node receives one immutable `NodeChange`. Matched changes
+carry the base location and pre/post `GraphFacts`, so a renderer can show a prior
+`limit(1000)` bound becoming unproven at an unchanged action. `GraphComparison`
+records `requested_ref`, the resolved `merge_base`, `base_capture_complete`, and
+`current_source="working-tree"`. Matching runs before finding-centered pruning;
+changes for pruned nodes are dropped. Without Git comparison, retained nodes are
+`not-compared` and `comparison` is `None`. Current-graph `capture_complete` still
+describes only current budget status; base incompleteness is separate.
+
+No graph JSON or HTML is added in this slice. Finding subtraction, legacy renders,
+and `to_dict()` schema 1 are unchanged.
+
 ## Planned public surface
 
-Implemented in slice 07: `Scanner.scan(..., include_graph=False)` and the optional
-keyword-only `ScanReport.graph` field. Graph records are immutable; ASTs,
-collectors, and tracked values remain private.
+Implemented in slices 07–08: `Scanner.scan(..., include_graph=False)`, the optional
+keyword-only `ScanReport.graph` field, and, for Git comparisons, `graph.comparison`
+plus per-node `graph.changes`. Graph records are immutable; ASTs, collectors, and
+tracked values remain private.
 
 Still planned: `report.render("graph-json")` and `report.render("html")` when those
 slices are complete. Rendering a graph format without captured graph data must fail

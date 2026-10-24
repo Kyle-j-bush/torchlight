@@ -392,7 +392,13 @@ class GitReportGraphTests(GitRepository):
         )
         self.assertEqual(report.findings, ())
         self.assertEqual(report.errors, ())
-        self.assertEqual(report.graph, AnalysisGraph())
+        self.assertEqual(report.graph.artifacts, ())
+        self.assertEqual(report.graph.nodes, ())
+        self.assertEqual(report.graph.links, ())
+        self.assertEqual(report.graph.changes, ())
+        self.assertEqual(report.graph.comparison.requested_ref, self.base)
+        self.assertEqual(report.graph.comparison.merge_base, self.base)
+        self.assertTrue(report.graph.comparison.base_capture_complete)
 
     def test_invalid_comparison_ref_returns_an_empty_requested_graph(self):
         with patch("torchlight.scanner.scan_file") as scan_file:
