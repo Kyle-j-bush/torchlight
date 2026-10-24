@@ -76,12 +76,12 @@ public-example rehearsal. Independent human-labeled production evaluation is ope
 
 The [RiskMap implementation contract](riskmap.md) defines a 12-PR dependency stack
 for opt-in static evidence maps, graph JSON, and accessible offline HTML.
-The first six slices add stack-compatible CI, pre-refactor preservation tests,
-an internal immutable graph model with a bounded collector, private tracked state,
-and opt-in internal linear/control-flow traces, loop summaries, analysis
-boundaries, and cross-cell file/blob notebook capture. Ordinary scans still
-capture no graph records; public graph APIs and new output formats
-are not implemented yet.
+The first seven slices add stack-compatible CI, pre-refactor preservation tests,
+an immutable graph model with a bounded collector, private tracked state, opt-in
+linear/control-flow traces, loop summaries, analysis boundaries, cross-cell
+file/blob notebook capture, and an opt-in public report graph with final finding
+links and pruning. Ordinary scans still capture no graph records; graph JSON and
+HTML output formats are not implemented yet.
 Each slice includes its own tests and passes its review gate before dependent work.
 
 ## Next: analysis and review contracts

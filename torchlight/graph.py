@@ -6,10 +6,11 @@
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal, get_args
 
-from torchlight.diagnostics import Location
+from torchlight.diagnostics import Finding, Location
 
 type SourceKind = Literal["python", "jupyter", "databricks"]
 type NodeKind = Literal[
@@ -96,6 +97,17 @@ class FindingAnchor:
 
 
 @dataclass(frozen=True)
+class FindingLink:
+    """Final report link for one surviving finding; ``node_id`` may be unavailable."""
+
+    artifact_id: str
+    finding_id: str
+    rule_id: str
+    location: Location
+    node_id: str | None
+
+
+@dataclass(frozen=True)
 class CaptureLimit:
     artifact_id: str
     max_records: int
@@ -111,10 +123,11 @@ class AnalysisGraph:
     nodes: tuple[GraphNode, ...] = ()
     edges: tuple[GraphEdge, ...] = ()
     anchors: tuple[FindingAnchor, ...] = ()
+    links: tuple[FindingLink, ...] = ()
     limits: tuple[CaptureLimit, ...] = ()
 
     def __post_init__(self) -> None:
-        for name in ("artifacts", "nodes", "edges", "anchors", "limits"):
+        for name in ("artifacts", "nodes", "edges", "anchors", "links", "limits"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
         artifacts = {artifact.id for artifact in self.artifacts}
         nodes = {node.id: node for node in self.nodes}
@@ -142,6 +155,18 @@ class AnalysisGraph:
                 or nodes[anchor.node_id].artifact_id != anchor.artifact_id
             ):
                 raise ValueError("finding anchor references an unknown or foreign node")
+        finding_ids = set()
+        for link in self.links:
+            if link.finding_id in finding_ids:
+                raise ValueError("finding link IDs must be unique")
+            finding_ids.add(link.finding_id)
+            if link.artifact_id not in artifacts:
+                raise ValueError("finding link references an unknown artifact")
+            if link.node_id is not None and (
+                link.node_id not in nodes
+                or nodes[link.node_id].artifact_id != link.artifact_id
+            ):
+                raise ValueError("finding link references an unknown or foreign node")
         if len({limit.artifact_id for limit in self.limits}) != len(self.limits):
             raise ValueError("capture limits must be unique per artifact")
         if any(limit.artifact_id not in artifacts for limit in self.limits):
@@ -236,3 +261,85 @@ class _GraphCollector:
             anchors=tuple(self._anchors.values()),
             limits=(self._limit,) if self._truncated else (),
         )
+
+
+def _finding_id(
+    artifact_id: str, rule_id: str, location: Location, occurrence: int
+) -> str:
+    return "f-" + _digest(
+        [
+            "finding-v1",
+            artifact_id,
+            rule_id,
+            str(location.line),
+            str(location.column),
+            "" if location.cell is None else str(location.cell),
+            str(occurrence),
+        ]
+    )
+
+
+def report_graph(
+    graphs: Iterable[AnalysisGraph], findings: Iterable[Finding]
+) -> AnalysisGraph:
+    """Link already-filtered findings and prune to their paths plus boundaries."""
+    graphs = tuple(graphs)
+    artifacts = tuple(artifact for graph in graphs for artifact in graph.artifacts)
+    nodes = tuple(node for graph in graphs for node in graph.nodes)
+    edges = tuple(edge for graph in graphs for edge in graph.edges)
+    limits = tuple(limit for graph in graphs for limit in graph.limits)
+    anchors = {
+        (anchor.artifact_id, anchor.rule_id, anchor.location): anchor
+        for graph in graphs
+        for anchor in graph.anchors
+    }
+    artifacts_by_path = {artifact.path: artifact for artifact in artifacts}
+
+    links = []
+    occurrences: Counter[tuple[str, str, Location]] = Counter()
+    for finding in findings:
+        artifact = artifacts_by_path.get(finding.path)
+        if artifact is None:
+            raise ValueError(f"finding path has no captured artifact: {finding.path}")
+        key = (artifact.id, finding.rule_id, finding.location)
+        occurrences[key] += 1
+        anchor = anchors.get(key)
+        links.append(
+            FindingLink(
+                artifact.id,
+                _finding_id(
+                    artifact.id, finding.rule_id, finding.location, occurrences[key]
+                ),
+                finding.rule_id,
+                finding.location,
+                anchor.node_id if anchor is not None else None,
+            )
+        )
+
+    node_by_id = {node.id: node for node in nodes}
+    parents: dict[str, list[str]] = {}
+    for edge in edges:
+        parents.setdefault(edge.target, []).append(edge.source)
+    roots = {link.node_id for link in links if link.node_id is not None}
+    roots.update(node.id for node in nodes if node.kind == "opaque")
+    kept: set[str] = set()
+    pending = list(roots)
+    while pending:
+        node_id = pending.pop()
+        if node_id in kept:
+            continue
+        kept.add(node_id)
+        pending.extend(parents.get(node_id, ()))
+
+    artifact_ids = (
+        {node_by_id[node_id].artifact_id for node_id in kept}
+        | {link.artifact_id for link in links}
+        | {limit.artifact_id for limit in limits}
+    )
+    return AnalysisGraph(
+        artifacts=tuple(a for a in artifacts if a.id in artifact_ids),
+        nodes=tuple(n for n in nodes if n.id in kept),
+        edges=tuple(e for e in edges if e.source in kept and e.target in kept),
+        links=tuple(links),
+        limits=tuple(limit for limit in limits if limit.artifact_id in artifact_ids),
+    )

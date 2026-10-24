@@ -13,6 +13,7 @@ from torchlight.config import Config
 from torchlight.diagnostics import Finding
 from torchlight.files import SOURCE_SUFFIXES, iter_source_files, scan_file, scan_source
 from torchlight.git import GitComparison, GitError
+from torchlight.graph import AnalysisGraph, GraphArtifact, _GraphCollector, report_graph
 from torchlight.identity import project_path
 from torchlight.reporting import render
 
@@ -22,11 +23,14 @@ class ScanReport:
     findings: tuple[Finding, ...] = ()
     errors: tuple[str, ...] = ()
     root: Path = field(default_factory=Path.cwd)
+    graph: AnalysisGraph | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "findings", tuple(self.findings))
         object.__setattr__(self, "errors", tuple(self.errors))
         object.__setattr__(self, "root", Path(self.root).resolve())
+        if self.graph is not None and not isinstance(self.graph, AnalysisGraph):
+            raise TypeError("graph must be an AnalysisGraph or None")
 
     @property
     def exit_code(self) -> int:
@@ -71,6 +75,7 @@ class Scanner:
         *,
         use_baseline: bool = True,
         changed_from: str | None = None,
+        include_graph: bool = False,
     ) -> ScanReport:
         """Return findings/errors without printing or modifying baseline files.
 
@@ -78,16 +83,20 @@ class Scanner:
         are report errors. Invalid API arguments raise TypeError/ValueError.
         changed_from compares changed files with REF/HEAD's merge base using
         current policy on both snapshots, ignoring any configured baseline.
+        include_graph captures an immutable evidence map for the report.
         """
         if type(use_baseline) is not bool:
             raise TypeError("use_baseline must be a bool")
+        if type(include_graph) is not bool:
+            raise TypeError("include_graph must be a bool")
         if isinstance(paths, (str, Path)):
             paths = (paths,)
         # Validate before reading inputs, rather than partially scanning a bad call.
         inputs = tuple(Path(path) for path in paths)
+        graph = AnalysisGraph() if include_graph else None
         if not inputs:
             return ScanReport(
-                errors=("no input paths supplied",), root=self.config.root
+                errors=("no input paths supplied",), root=self.config.root, graph=graph
             )
         comparison = None
         if changed_from is not None:
@@ -95,7 +104,9 @@ class Scanner:
                 comparison = GitComparison.from_ref(self.config.root, changed_from)
             except GitError as exc:
                 return ScanReport(
-                    errors=(f"Git comparison error: {exc}",), root=self.config.root
+                    errors=(f"Git comparison error: {exc}",),
+                    root=self.config.root,
+                    graph=graph,
                 )
         baseline = None
         if comparison is None and use_baseline and self.config.baseline is not None:
@@ -103,11 +114,14 @@ class Scanner:
                 baseline = read_baseline(self.config.baseline, rules=self.config.rules)
             except BaselineError as exc:
                 return ScanReport(
-                    errors=(f"baseline error: {exc}",), root=self.config.root
+                    errors=(f"baseline error: {exc}",),
+                    root=self.config.root,
+                    graph=graph,
                 )
 
         findings: list[Finding] = []
         errors: list[str] = []
+        graphs: list[AnalysisGraph] = []
         seen: set[Path] = set()
 
         def discovery_error(exc: OSError) -> None:
@@ -156,11 +170,19 @@ class Scanner:
                     if resolved in seen:
                         continue
                     seen.add(resolved)
+                    collector = (
+                        _GraphCollector(GraphArtifact(str(file), "python"))
+                        if include_graph
+                        else None
+                    )
                     file_findings, file_errors = scan_file(
                         file,
                         assume_sessions=self.config.assume_sessions,
                         plugins=self.config.plugins,
+                        _collector=collector,
                     )
+                    if collector is not None:
+                        graphs.append(collector.build())
                     errors.extend(file_errors)
                     if comparison is not None:
                         try:
@@ -212,4 +234,6 @@ class Scanner:
 
         if baseline is not None:
             findings = new_findings(findings, baseline, self.config.root)
-        return ScanReport(tuple(findings), tuple(errors), self.config.root)
+        if include_graph:
+            graph = report_graph(graphs, findings)
+        return ScanReport(tuple(findings), tuple(errors), self.config.root, graph=graph)

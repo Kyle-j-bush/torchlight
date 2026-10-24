@@ -16,6 +16,7 @@ from torchlight.graph import (
     AnalysisGraph,
     CaptureLimit,
     FindingAnchor,
+    FindingLink,
     GraphArtifact,
     GraphEdge,
     GraphFacts,
@@ -90,6 +91,16 @@ class GraphTests(unittest.TestCase):
             (graph.nodes[0].after, "kind"),
             (graph.edges[0], "relation"),
             (graph.anchors[0], "node_id"),
+            (
+                FindingLink(
+                    graph.artifacts[0].id,
+                    "finding",
+                    "TL001",
+                    Location(1),
+                    graph.nodes[0].id,
+                ),
+                "node_id",
+            ),
             (CaptureLimit(graph.artifacts[0].id, 1), "max_records"),
         ):
             with (
@@ -107,7 +118,7 @@ class GraphTests(unittest.TestCase):
         original = self.pipeline().build()
         fields = {
             name: list(getattr(original, name))
-            for name in ("artifacts", "nodes", "edges", "anchors", "limits")
+            for name in ("artifacts", "nodes", "edges", "anchors", "links", "limits")
         }
         graph = AnalysisGraph(**fields)
         for items in fields.values():
@@ -294,6 +305,13 @@ class GraphTests(unittest.TestCase):
         foreign_node = replace(
             graph.nodes[0], id="foreign-node", artifact_id=foreign.id
         )
+        link = FindingLink(
+            graph.artifacts[0].id,
+            "finding",
+            graph.anchors[0].rule_id,
+            graph.anchors[0].location,
+            graph.anchors[0].node_id,
+        )
         cases = (
             {"artifacts": (*graph.artifacts, graph.artifacts[0])},
             {"nodes": (*graph.nodes, graph.nodes[0])},
@@ -308,6 +326,10 @@ class GraphTests(unittest.TestCase):
             {"anchors": (*graph.anchors, graph.anchors[0])},
             {"anchors": (replace(graph.anchors[0], artifact_id="missing"),)},
             {"anchors": (replace(graph.anchors[0], node_id="missing"),)},
+            {"links": (link, link)},
+            {"links": (replace(link, artifact_id="missing"),)},
+            {"links": (replace(link, node_id="missing"),)},
+            {"links": (replace(link, node_id=foreign_node.id),)},
             {
                 "artifacts": (*graph.artifacts, foreign),
                 "anchors": (replace(graph.anchors[0], artifact_id=foreign.id),),
@@ -377,6 +399,7 @@ class GraphTests(unittest.TestCase):
                     GraphEdge,
                     GraphFacts,
                     FindingAnchor,
+                    FindingLink,
                     CaptureLimit,
                     _GraphCollector,
                 ):

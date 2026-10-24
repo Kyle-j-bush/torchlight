@@ -40,9 +40,14 @@ assert len(report.findings) == 1 and isinstance(report.findings[0], Finding)
 assert isinstance(report.findings[0].location, Location)
 assert isinstance(report.findings[0].rule, Rule)
 assert report.findings[0].rule_id == 'TL001'
+assert report.graph is None
 assert json.loads(report.render('json')) == report.to_dict()
 assert report.to_dict()['schema_version'] == 1
 assert report.findings[0].fingerprint.startswith('v1:')
+captured = Scanner(Config(root=Path.cwd())).scan(Path(sys.argv[1]), include_graph=True)
+assert captured.to_dict() == report.to_dict()
+assert captured.graph is not None and captured.graph.capture_complete
+assert len(captured.graph.links) == 1 and captured.graph.links[0].node_id
 """
 COMPARISON_API_CHECK = """
 from pathlib import Path

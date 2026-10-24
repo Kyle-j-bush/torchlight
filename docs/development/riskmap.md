@@ -1,12 +1,12 @@
 # RiskMap implementation contract
 
-Status: internal foundations only, not a shipped feature. Slices 01–06 add
-preservation tests, stacked-review CI, and an immutable graph model with a bounded
-collector, private tracked analyzer state, and opt-in internal linear/control-flow
-trace capture and file/blob notebook plumbing with invalidation boundaries.
-Ordinary scans do not allocate graph records. Public graph APIs and
-HTML/graph-JSON formats are still planned; they
-are not available in v0.8.0. No release version changes until release readiness.
+Status: pre-release foundations only, not a shipped feature. Slices 01–07 add
+preservation tests, stacked-review CI, an immutable graph model with a bounded
+collector, private tracked analyzer state, opt-in internal linear/control-flow
+trace capture and file/blob notebook plumbing with invalidation boundaries, and an
+opt-in public report graph. Ordinary scans do not allocate graph records. Graph
+JSON and HTML output formats are still planned; they are not available in v0.8.0.
+No release version changes until release readiness.
 
 ## Product boundary
 
@@ -134,9 +134,9 @@ behavior at a rule/location. The collector never owns the actual scan findings.
 
 Snapshots identify truncated artifacts through `CaptureLimit`; `capture_complete`
 describes only capture-budget status, not full source coverage or safety. Missing
-trace anchors can explicitly hold `None`. Scanner filtering, fallback evidence,
-and report-local finding IDs remain slice 07 work. No configuration knob or
-graph allocation is added to ordinary scans in this slice.
+trace anchors can explicitly hold `None`. Slice 07 now performs scanner filtering,
+fallback links, and report-local finding IDs. No configuration knob or graph
+allocation is added to ordinary scans.
 
 ### Tracked state (slice 03)
 
@@ -181,8 +181,8 @@ plugin facts/errors. Unsupported frame receiver methods/attributes produce opaqu
 endpoints without granting identity to their result. Missing prior endpoints are
 labeled rather than connected to a guessed path. Slice 05 extends these boundaries
 to free calls and control flow and adds alternatives/loop context. Slice 06 adds
-notebook invalidation; scanner filtering, report-local finding IDs, and public
-rendering remain deferred.
+notebook invalidation; slice 07 adds scanner filtering and report links. Public
+rendering remains deferred.
 
 ### Control-flow capture (slice 05)
 
@@ -228,7 +228,8 @@ collector per artifact/scan. Dispatch resolves its source kind to `python`,
 `jupyter`, or `databricks` before any records are captured; a source-kind change
 after capture starts is rejected. The collector and budget span all notebook
 cells, as does the existing analyzer state. Ordinary scans allocate neither a
-collector nor graph records. Public `Scanner.scan`/`ScanReport` remain unchanged.
+collector nor graph records. Public `Scanner.scan`/`ScanReport` were unchanged in
+slice 06; slice 07 adds the opt-in report graph.
 
 Aliases, constraints, writer facts, iterator endpoints, alternatives, and loop
 context cross cells through that existing tracked state, not through reconstructed
@@ -252,8 +253,8 @@ exhausted budgets never suppress findings, errors, or state invalidation.
 Read/decoding errors, invalid notebook documents, and unrecoverable Databricks
 tokenization failures retain their existing errors, without invented cell paths.
 Graph completeness still describes only budget status, not successful analysis.
-Anchors remain pre-suppression records; final filtering, error reporting, and
-finding-link fallback are slice 07 work. Preservation goldens and file/blob,
+Anchors remain pre-suppression records; slice 07 filters them into final links and
+keeps fallback evidence when no trace exists. Preservation goldens and file/blob,
 capture-on/off, plugin, budget, and coordinate tests cover all five rules and all
 three source kinds, plus the 68-case regression corpus. This passes the slice-06
 local evidence gate, not independent explanation review or production validation.
@@ -280,14 +281,43 @@ Where operation matching is established, show changed facts such as a prior
 Record the requested ref, resolved merge base, and that current source comes
 from the working tree, not necessarily HEAD. Never reread source while rendering.
 
+### Scanner report graphs (slice 07)
+
+`Scanner.scan(..., include_graph=False)` validates the flag as a bool before
+source I/O. When enabled, one fresh collector is created per current artifact and
+the existing `scan_file`/`scan_source` paths resolve its source kind; base-revision
+comparison scans do not capture. Default and explicit opt-out scans allocate no
+collector or graph records. `ScanReport.graph` is a keyword-only immutable
+`AnalysisGraph | None`; it is `None` unless requested and an empty graph when
+capture was requested but no artifact was retained, including early configuration,
+baseline, or Git-comparison errors and partial scans with no retained evidence.
+
+Report assembly runs after suppression, rule selection, baseline matching, and
+existing Git finding subtraction. Each surviving finding receives a report-local
+`FindingLink`; suppressed, baselined, deselected, and subtracted findings never
+become links or graph warnings. Link IDs include artifact identity, rule,
+coordinates, and an occurrence suffix, so duplicate fingerprints at different
+locations stay distinct. A missing or budget-dropped anchor still produces a link
+with `node_id=None`, preserving ordinary finding evidence and making the gap
+explicit.
+
+Raw pre-policy anchors are replaced by final links in the report graph. Pruning
+retains every ancestor of a linked node and every opaque analysis boundary,
+including boundaries with no finding. Artifacts are retained only when they have
+a retained node, a final link, or a capture limit; retained limits keep
+`capture_complete` false even when all of that artifact's nodes were pruned.
+Errors remain in `ScanReport.errors`; capture completeness still describes budget
+status only. Legacy renders and `to_dict()` schema 1 are unchanged. Graph JSON and
+HTML remain slices 09–10.
+
 ## Planned public surface
 
-Add `Scanner.scan(..., include_graph=False)` and an optional keyword-only
-`ScanReport.graph` field. Validate the new bool before source I/O. Graph records
-are immutable; ASTs, collectors, and tracked values remain private.
+Implemented in slice 07: `Scanner.scan(..., include_graph=False)` and the optional
+keyword-only `ScanReport.graph` field. Graph records are immutable; ASTs,
+collectors, and tracked values remain private.
 
-Add `report.render("graph-json")` and `report.render("html")` when those slices
-are complete. Rendering a graph format without captured graph data must fail
+Still planned: `report.render("graph-json")` and `report.render("html")` when those
+slices are complete. Rendering a graph format without captured graph data must fail
 clearly, never silently rescan. Graph JSON has a distinct document type and
 schema version; ordinary finding JSON does not gain graph fields.
 

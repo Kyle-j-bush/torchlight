@@ -70,10 +70,18 @@ The CLI retains its documented working-directory discovery.
   `TypeError`/`ValueError`. See [Git comparison](git-comparison.md) for limits.
 - Invalid API argument types raise `TypeError`/`ValueError`; configuration errors
   raise `ConfigError`. Do not treat an exception as a clean report.
+- `include_graph=True` captures an immutable `report.graph` evidence map. The
+  default is `False`; ordinary scans allocate no graph records. The flag must be
+  a bool and is validated before source I/O. `graph` is `None` unless requested
+  and an empty graph when capture was requested but no artifact was retained.
+  Graph records are pre-1.0 internal types, and no graph output format is
+  available yet. Graph capture never changes findings, errors, `to_dict()`, or
+  the legacy renders.
 
-`ScanReport` contains immutable `findings` and `errors` tuples and the absolute
-`root`. `exit_code` is 0 for clean, 1 for findings (even with errors), or 2 for
-errors only. Both findings and errors must be reviewed if present.
+`ScanReport` contains immutable `findings` and `errors` tuples, the absolute
+`root`, and an optional keyword-only `graph`. `exit_code` is 0 for clean, 1 for
+findings (even with errors), or 2 for errors only. Both findings and errors must
+be reviewed if present.
 
 `report.to_dict()` returns a detached [JSON schema 1](reporting.md) document.
 `report.render("text" | "json" | "github" | "sarif")` returns serialized text;

@@ -25,7 +25,7 @@ the files it scans. Its core has no third-party runtime dependencies.
 - [Spark-version assessment](development/spark-versions.md): upstream API/Connect differences, not runtime certification.
 - [Follow-up roadmap](development/roadmap.md).
 - [Internal detector contributor guide](development/detectors.md).
-- [RiskMap implementation contract](development/riskmap.md): planned evidence maps, compatibility gates, and the dependent PR stack; no graph formats are available yet.
+- [RiskMap implementation contract](development/riskmap.md): planned evidence maps, compatibility gates, and the dependent PR stack; the opt-in in-memory report graph exists, but no graph output format is available yet.
 - [Real-world benchmark protocol](../benchmarks/real-world-protocol.md).
 - [Local validation pilot](../benchmarks/local-validation.md): frozen corpus, explicit labeler provenance, and independent-review requirements.
 - [Apache Spark example rehearsal](development/public-corpus-rehearsal.md): full 147-file agent audit and aggregate-only results, not production validation.
